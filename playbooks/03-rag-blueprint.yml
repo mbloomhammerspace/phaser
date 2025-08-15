@@ -1,0 +1,642 @@
+---
+- name: Deploy NVIDIA RAG Blueprint
+  hosts: kube_control_plane
+  become: false
+  gather_facts: false
+  
+  vars:
+    rag_namespace: "rag-system"
+    milvus_namespace: "milvus"
+    nemo_namespace: "nemo-system"
+    observability_namespace: "observability"
+    rag_blueprint_repo: "https://github.com/NVIDIA-AI-Blueprints/rag.git"
+    rag_blueprint_version: "v2.2.1"
+    
+  tasks:
+    - name: Create RAG and observability namespaces
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ item }}"
+      loop:
+        - "{{ rag_namespace }}"
+        - "{{ milvus_namespace }}"
+        - "{{ nemo_namespace }}"
+        - "{{ observability_namespace }}"
+        
+    - name: Clone NVIDIA RAG Blueprint repository
+      git:
+        repo: "{{ rag_blueprint_repo }}"
+        dest: /tmp/rag-blueprint
+        version: "{{ rag_blueprint_version }}"
+        
+    - name: Install Milvus with GPU acceleration
+      kubernetes.core.helm:
+        name: milvus
+        chart_ref: milvus/milvus
+        release_namespace: "{{ milvus_namespace }}"
+        version: "4.3.0"
+        state: present
+        values:
+          cluster:
+            enabled: true
+            replicas:
+              dataNode: 2
+              indexNode: 2
+              queryNode: 2
+          externalEtcd:
+            enabled: false
+          etcd:
+            enabled: true
+            persistence:
+              enabled: true
+              size: 20Gi
+          storage:
+            data:
+              persistentVolumeClaim:
+                enabled: true
+                size: 100Gi
+            logs:
+              persistentVolumeClaim:
+                enabled: true
+                size: 20Gi
+          gpu:
+            enabled: true
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+              requests:
+                nvidia.com/gpu: 1
+          service:
+            type: NodePort
+            nodePort: 30090
+          ingress:
+            enabled: true
+            annotations:
+              kubernetes.io/ingress.class: nginx
+            hosts:
+              - host: milvus.local
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    
+    - name: Wait for Milvus to be ready
+      kubernetes.core.k8s_info:
+        kind: StatefulSet
+        namespace: "{{ milvus_namespace }}"
+        name: milvus-datacoord
+      register: milvus_status
+      until: milvus_status.resources[0].status.readyReplicas == milvus_status.resources[0].status.replicas
+      retries: 60
+      delay: 30
+      
+    - name: Install NeMo Retriever services
+      kubernetes.core.helm:
+        name: nemo-retriever
+        chart_ref: /tmp/rag-blueprint/deploy/helm/nemo-retriever
+        release_namespace: "{{ nemo_namespace }}"
+        state: present
+        values:
+          global:
+            gpu:
+              enabled: true
+              count: 1
+          retriever:
+            enabled: true
+            replicaCount: 2
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+                memory: 8Gi
+                cpu: 4
+              requests:
+                nvidia.com/gpu: 1
+                memory: 4Gi
+                cpu: 2
+          embedding:
+            enabled: true
+            replicaCount: 2
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+                memory: 8Gi
+                cpu: 4
+              requests:
+                nvidia.com/gpu: 1
+                memory: 4Gi
+                cpu: 2
+          reranking:
+            enabled: true
+            replicaCount: 1
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+                memory: 8Gi
+                cpu: 4
+              requests:
+                nvidia.com/gpu: 1
+                memory: 4Gi
+                cpu: 2
+          llm:
+            enabled: true
+            replicaCount: 1
+            resources:
+              limits:
+                nvidia.com/gpu: 1
+                memory: 16Gi
+                cpu: 8
+              requests:
+                nvidia.com/gpu: 1
+                memory: 8Gi
+                cpu: 4
+                
+    - name: Deploy RAG Server
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: rag-server
+            namespace: "{{ rag_namespace }}"
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: rag-server
+            template:
+              metadata:
+                labels:
+                  app: rag-server
+              spec:
+                containers:
+                - name: rag-server
+                  image: nvcr.io/nvidia/rag-server:latest
+                  ports:
+                  - containerPort: 8000
+                  env:
+                  - name: MILVUS_HOST
+                    value: "milvus.{{ milvus_namespace }}.svc.cluster.local"
+                  - name: MILVUS_PORT
+                    value: "19530"
+                  - name: NEMO_RETRIEVER_HOST
+                    value: "nemo-retriever.{{ nemo_namespace }}.svc.cluster.local"
+                  - name: NEMO_RETRIEVER_PORT
+                    value: "8000"
+                  resources:
+                    limits:
+                      nvidia.com/gpu: 1
+                      memory: 4Gi
+                      cpu: 2
+                    requests:
+                      nvidia.com/gpu: 1
+                      memory: 2Gi
+                      cpu: 1
+                      
+    - name: Create RAG Server service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: rag-server
+            namespace: "{{ rag_namespace }}"
+          spec:
+            type: NodePort
+            ports:
+            - port: 8000
+              targetPort: 8000
+              nodePort: 30080
+            selector:
+              app: rag-server
+              
+    - name: Deploy RAG Playground
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: rag-playground
+            namespace: "{{ rag_namespace }}"
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: rag-playground
+            template:
+              metadata:
+                labels:
+                  app: rag-playground
+              spec:
+                containers:
+                - name: rag-playground
+                  image: nvcr.io/nvidia/rag-playground:latest
+                  ports:
+                  - containerPort: 3000
+                  env:
+                  - name: RAG_SERVER_URL
+                    value: "http://rag-server:8000"
+                  resources:
+                    limits:
+                      memory: 2Gi
+                      cpu: 1
+                    requests:
+                      memory: 1Gi
+                      cpu: 0.5
+                      
+    - name: Create RAG Playground service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: rag-playground
+            namespace: "{{ rag_namespace }}"
+          spec:
+            type: NodePort
+            ports:
+            - port: 3000
+              targetPort: 3000
+              nodePort: 30081
+            selector:
+              app: rag-playground
+              
+    - name: Deploy Ingestor Server
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ingestor-server
+            namespace: "{{ rag_namespace }}"
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ingestor-server
+            template:
+              metadata:
+                labels:
+                  app: ingestor-server
+              spec:
+                containers:
+                - name: ingestor-server
+                  image: nvcr.io/nvidia/ingestor-server:latest
+                  ports:
+                  - containerPort: 8001
+                  env:
+                  - name: MILVUS_HOST
+                    value: "milvus.{{ milvus_namespace }}.svc.cluster.local"
+                  - name: MILVUS_PORT
+                    value: "19530"
+                  resources:
+                    limits:
+                      memory: 4Gi
+                      cpu: 2
+                    requests:
+                      memory: 2Gi
+                      cpu: 1
+                      
+    - name: Create Ingestor Server service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ingestor-server
+            namespace: "{{ rag_namespace }}"
+          spec:
+            type: NodePort
+            ports:
+            - port: 8001
+              targetPort: 8001
+              nodePort: 30082
+            selector:
+              app: ingestor-server
+              
+    - name: Wait for RAG services to be ready
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ rag_namespace }}"
+        name: "{{ item }}"
+      register: rag_deployments
+      loop:
+        - rag-server
+        - rag-playground
+        - ingestor-server
+      until: rag_deployments.resources[0].status.readyReplicas == rag_deployments.resources[0].status.replicas
+      retries: 30
+      delay: 20
+      
+    - name: Verify RAG deployment
+      shell: |
+        echo "=== RAG Services Status ==="
+        kubectl get pods -n {{ rag_namespace }} -o wide
+        echo ""
+        echo "=== Milvus Status ==="
+        kubectl get pods -n {{ milvus_namespace }} -o wide
+        echo ""
+        echo "=== NeMo Services Status ==="
+        kubectl get pods -n {{ nemo_namespace }} -o wide
+        echo ""
+        echo "=== Services ==="
+        kubectl get svc -n {{ rag_namespace }}
+        kubectl get svc -n {{ milvus_namespace }}
+        kubectl get svc -n {{ nemo_namespace }}
+      register: rag_status
+      
+    - name: Display RAG deployment status
+      debug:
+        msg: "{{ rag_status.stdout }}"
+        
+    - name: Test RAG API connectivity
+      uri:
+        url: "http://localhost:30080/health"
+        method: GET
+        status_code: 200
+      register: rag_health_check
+      ignore_errors: true
+      
+    - name: Display RAG health check result
+      debug:
+        msg: "RAG API health check: {{ rag_health_check.status }}"
+        
+    - name: Create sample data ingestion
+      shell: |
+        # Create a sample document for testing
+        cat > /tmp/sample_doc.txt << 'EOF'
+        This is a sample document for testing the RAG system.
+        It contains information about Kubernetes and GPU computing.
+        The NVIDIA RAG blueprint provides a complete solution for
+        building AI-powered applications with retrieval augmented generation.
+        EOF
+        
+        # Ingest the document
+        curl -X POST http://localhost:30082/documents \
+          -H "Content-Type: application/json" \
+          -d '{
+            "file": "'$(base64 -w 0 /tmp/sample_doc.txt)'",
+            "filename": "sample_doc.txt",
+            "metadata": {
+              "source": "test",
+              "category": "documentation"
+            }
+          }'
+      register: sample_ingestion
+      ignore_errors: true
+      
+    - name: Display sample ingestion result
+      debug:
+        msg: "Sample document ingestion: {{ sample_ingestion.stdout }}"
+        
+    - name: Test RAG query
+      shell: |
+        curl -X POST http://localhost:30080/generate \
+          -H "Content-Type: application/json" \
+          -d '{
+            "query": "What is the NVIDIA RAG blueprint?",
+            "max_tokens": 100
+          }'
+      register: rag_query_test
+      ignore_errors: true
+      
+    - name: Display RAG query test result
+      debug:
+        msg: "RAG query test: {{ rag_query_test.stdout }}"
+        
+    # ========================================
+    # OBSERVABILITY COMPONENTS
+    # ========================================
+    
+    - name: Install OpenTelemetry Collector
+      kubernetes.core.helm:
+        name: otel-collector
+        chart_ref: open-telemetry/opentelemetry-collector
+        release_namespace: "{{ observability_namespace }}"
+        version: "0.45.0"
+        state: present
+        values:
+          mode: daemonset
+          config:
+            receivers:
+              otlp:
+                protocols:
+                  grpc:
+                    endpoint: 0.0.0.0:4317
+                  http:
+                    endpoint: 0.0.0.0:4318
+            processors:
+              batch:
+                timeout: 1s
+                send_batch_size: 1024
+            exporters:
+              otlp:
+                endpoint: "http://jaeger-collector:4317"
+                tls:
+                  insecure: true
+              logging:
+                verbosity: detailed
+            service:
+              pipelines:
+                traces:
+                  receivers: [otlp]
+                  processors: [batch]
+                  exporters: [otlp, logging]
+                metrics:
+                  receivers: [otlp]
+                  processors: [batch]
+                  exporters: [otlp, logging]
+                logs:
+                  receivers: [otlp]
+                  processors: [batch]
+                  exporters: [otlp, logging]
+                  
+    - name: Install Jaeger for distributed tracing
+      kubernetes.core.helm:
+        name: jaeger
+        chart_ref: jaegertracing/jaeger
+        release_namespace: "{{ observability_namespace }}"
+        version: "0.76.0"
+        state: present
+        values:
+          query:
+            service:
+              type: NodePort
+              nodePort: 30668
+          collector:
+            service:
+              type: ClusterIP
+          agent:
+            enabled: false
+          storage:
+            type: memory
+            options:
+              memory:
+                max-traces: 50000
+                
+    - name: Install Zipkin (alternative to Jaeger)
+      kubernetes.core.helm:
+        name: zipkin
+        chart_ref: openzipkin/zipkin
+        release_namespace: "{{ observability_namespace }}"
+        version: "0.3.0"
+        state: present
+        values:
+          service:
+            type: NodePort
+            nodePort: 30669
+          persistence:
+            enabled: true
+            size: 10Gi
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: 500m
+            requests:
+              memory: 512Mi
+              cpu: 250m
+              
+    - name: Install Attu for Milvus management
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: attu
+            namespace: "{{ milvus_namespace }}"
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: attu
+            template:
+              metadata:
+                labels:
+                  app: attu
+              spec:
+                containers:
+                - name: attu
+                  image: zilliz/attu:latest
+                  ports:
+                  - containerPort: 3000
+                  env:
+                  - name: MILVUS_URL
+                    value: "http://milvus-standalone:19121"
+                  - name: HOST_URL
+                    value: "http://0.0.0.0:3000"
+                  resources:
+                    limits:
+                      memory: 512Mi
+                      cpu: 500m
+                    requests:
+                      memory: 256Mi
+                      cpu: 250m
+                      
+    - name: Create Attu service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: attu
+            namespace: "{{ milvus_namespace }}"
+          spec:
+            type: NodePort
+            ports:
+            - port: 3000
+              targetPort: 3000
+              nodePort: 30670
+            selector:
+              app: attu
+              
+    - name: Install Prometheus for metrics collection
+      kubernetes.core.helm:
+        name: prometheus
+        chart_ref: prometheus-community/kube-prometheus-stack
+        release_namespace: "{{ observability_namespace }}"
+        version: "55.0.0"
+        state: present
+        values:
+          prometheus:
+            prometheusSpec:
+              retention: 7d
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: ""
+                    accessModes: ["ReadWriteOnce"]
+                    resources:
+                      requests:
+                        storage: 50Gi
+          grafana:
+            enabled: true
+            service:
+              type: NodePort
+              nodePort: 30671
+            adminPassword: admin
+            dashboardProviders:
+              dashboardproviders.yaml:
+                apiVersion: 1
+                providers:
+                - name: 'default'
+                  orgId: 1
+                  folder: ''
+                  type: file
+                  disableDeletion: false
+                  editable: true
+                  options:
+                    path: /var/lib/grafana/dashboards/default
+            dashboards:
+              default:
+                milvus-dashboard:
+                  gnetId: 13332
+                  revision: 1
+                  datasource: Prometheus
+                kubernetes-cluster:
+                  gnetId: 315
+                  revision: 3
+                  datasource: Prometheus
+                nvidia-gpu:
+                  gnetId: 14574
+                  revision: 1
+                  datasource: Prometheus
+                  
+    - name: Wait for observability services to be ready
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ observability_namespace }}"
+        name: "{{ item }}"
+      register: observability_deployments
+      loop:
+        - jaeger-query
+        - prometheus-grafana
+      until: observability_deployments.resources[0].status.readyReplicas == observability_deployments.resources[0].status.replicas
+      retries: 30
+      delay: 20
+      
+    - name: Verify observability deployment
+      shell: |
+        echo "=== Observability Services Status ==="
+        kubectl get pods -n {{ observability_namespace }} -o wide
+        echo ""
+        echo "=== Attu Status ==="
+        kubectl get pods -n {{ milvus_namespace }} -l app=attu -o wide
+        echo ""
+        echo "=== Observability Services ==="
+        kubectl get svc -n {{ observability_namespace }}
+        kubectl get svc -n {{ milvus_namespace }} -l app=attu
+      register: observability_status
+      
+    - name: Display observability deployment status
+      debug:
+        msg: "{{ observability_status.stdout }}"

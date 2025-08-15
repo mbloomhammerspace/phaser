@@ -1,0 +1,194 @@
+---
+- name: Install NVIDIA GPU Operator
+  hosts: kube_control_plane
+  become: false
+  gather_facts: false
+  
+  vars:
+    gpu_operator_version: "v23.9.0"
+    helm_repo_name: "nvidia"
+    helm_repo_url: "https://helm.ngc.nvidia.com/nvidia"
+    gpu_operator_namespace: "gpu-operator-resources"
+    
+  tasks:
+    - name: Add NVIDIA Helm repository
+      kubernetes.core.helm_repository:
+        name: "{{ helm_repo_name }}"
+        repo_url: "{{ helm_repo_url }}"
+        state: present
+      
+    - name: Update Helm repositories
+      kubernetes.core.helm_repository_info:
+        name: "{{ helm_repo_name }}"
+        
+    - name: Create GPU Operator namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ gpu_operator_namespace }}"
+            
+    - name: Install NVIDIA GPU Operator
+      kubernetes.core.helm:
+        name: gpu-operator
+        chart_ref: "{{ helm_repo_name }}/gpu-operator"
+        release_namespace: "{{ gpu_operator_namespace }}"
+        version: "{{ gpu_operator_version }}"
+        state: present
+        values:
+          # Enable all components
+          driver:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: driver
+            version: "535.154.05"
+            manager:
+              repository: nvcr.io/nvidia
+              image: k8s-driver-manager
+              version: "v0.6.0"
+          toolkit:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: container-toolkit
+            version: "1.15.5-ubuntu20.04"
+          devicePlugin:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: k8s-device-plugin
+            version: "v0.15.0"
+          dcgm:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: k8s-dcgm
+            version: "3.1.8-3.1.8-ubuntu20.04"
+          dcgmExporter:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: k8s-dcgm-exporter
+            version: "3.1.8-3.1.8-ubuntu20.04"
+          gfd:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: gpu-feature-discovery
+            version: "v0.8.2"
+          migManager:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: k8s-mig-manager
+            version: "v0.5.0"
+          nodeStatusExporter:
+            enabled: true
+            repository: nvcr.io/nvidia
+            image: gpu-operator-validator
+            version: "v23.9.0"
+          operator:
+            defaultRuntime: containerd
+            repository: nvcr.io/nvidia
+            image: gpu-operator
+            version: "{{ gpu_operator_version }}"
+            
+    - name: Wait for GPU Operator pods to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ gpu_operator_namespace }}"
+        label_selectors:
+          - app=gpu-operator
+      register: gpu_operator_pods
+      
+    - name: Check GPU Operator pod status
+      debug:
+        msg: "GPU Operator pods: {{ gpu_operator_pods.resources | map(attribute='metadata.name') | list }}"
+        
+    - name: Wait for GPU Operator deployment to be ready
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: gpu-operator
+            namespace: "{{ gpu_operator_namespace }}"
+        wait: true
+        wait_timeout: 300
+        wait_condition:
+          type: Available
+          status: "True"
+          
+    - name: Verify GPU Operator installation
+      shell: |
+        kubectl get pods -n {{ gpu_operator_namespace }}
+        kubectl get nodes -o json | jq '.items[] | select(.status.allocatable."nvidia.com/gpu" != null) | .metadata.name'
+      register: gpu_nodes
+      
+    - name: Display GPU nodes
+      debug:
+        msg: "GPU-enabled nodes: {{ gpu_nodes.stdout_lines }}"
+        
+    - name: Test GPU functionality
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: gpu-test
+            namespace: default
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: gpu-test
+              image: nvcr.io/nvidia/cuda:11.8.0-base-ubuntu20.04
+              command: ["nvidia-smi"]
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+      register: gpu_test_pod
+      
+    - name: Wait for GPU test pod to complete
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: gpu-test
+        namespace: default
+      register: gpu_test_status
+      until: gpu_test_status.resources[0].status.phase in ['Succeeded', 'Failed']
+      retries: 30
+      delay: 10
+      
+    - name: Get GPU test results
+      shell: kubectl logs gpu-test
+      register: gpu_test_logs
+      
+    - name: Display GPU test results
+      debug:
+        msg: "GPU test results: {{ gpu_test_logs.stdout }}"
+        
+    - name: Clean up GPU test pod
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: gpu-test
+            namespace: default
+            
+    - name: Verify GPU Operator components
+      shell: |
+        echo "=== GPU Operator Components ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -o wide
+        echo ""
+        echo "=== GPU Nodes ==="
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,GPU:.status.allocatable.'nvidia\.com/gpu'
+        echo ""
+        echo "=== GPU Device Plugin ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -l app=nvidia-device-plugin-daemonset
+        echo ""
+        echo "=== DCGM Exporter ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -l app=nvidia-dcgm-exporter
+      register: gpu_operator_status
+      
+    - name: Display final GPU Operator status
+      debug:
+        msg: "{{ gpu_operator_status.stdout }}"

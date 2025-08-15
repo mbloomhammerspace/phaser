@@ -1,0 +1,107 @@
+---
+- name: Deploy Kubernetes cluster with Kubespray
+  hosts: k8s_cluster
+  become: true
+  gather_facts: true
+  
+  vars:
+    kubespray_version: "v2.24.0"
+    kubernetes_version: "v1.28.0"
+    container_manager: "containerd"
+    network_plugin: "calico"
+    
+  pre_tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - curl
+          - wget
+          - unzip
+        state: present
+      when: ansible_os_family == "Debian"
+      
+    - name: Install required packages (RHEL/CentOS)
+      yum:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - curl
+          - wget
+          - unzip
+        state: present
+      when: ansible_os_family == "RedHat"
+      
+  tasks:
+    - name: Create kubespray directory
+      file:
+        path: /opt/kubespray
+        state: directory
+        mode: '0755'
+        
+    - name: Clone Kubespray repository
+      git:
+        repo: "https://github.com/kubernetes-sigs/kubespray.git"
+        dest: /opt/kubespray
+        version: "{{ kubespray_version }}"
+        
+    - name: Install Python dependencies
+      pip:
+        requirements: /opt/kubespray/requirements.txt
+        state: present
+        
+    - name: Copy inventory template
+      template:
+        src: inventory.yml.j2
+        dest: /opt/kubespray/inventory.yml
+        mode: '0644'
+        
+    - name: Configure Kubespray variables
+      template:
+        src: group_vars.yml.j2
+        dest: /opt/kubespray/group_vars/all.yml
+        mode: '0644'
+        
+    - name: Run Kubespray cluster deployment
+      command: ansible-playbook -i inventory.yml cluster.yml
+      args:
+        chdir: /opt/kubespray
+      register: kubespray_result
+      
+    - name: Copy kubeconfig to local machine
+      fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ playbook_dir }}/kubeconfig"
+        flat: yes
+      when: inventory_hostname in groups['kube_control_plane']
+      
+    - name: Set kubectl context
+      shell: |
+        export KUBECONFIG={{ playbook_dir }}/kubeconfig
+        kubectl config set-cluster kubernetes --server=https://{{ ansible_default_ipv4.address }}:6443
+        kubectl config set-credentials admin --client-certificate=/etc/kubernetes/admin.conf --client-key=/etc/kubernetes/admin.key
+        kubectl config set-context kubernetes --cluster=kubernetes --user=admin
+        kubectl config use-context kubernetes
+      when: inventory_hostname in groups['kube_control_plane']
+      
+  post_tasks:
+    - name: Wait for cluster to be ready
+      shell: kubectl get nodes --no-headers | wc -l
+      register: node_count
+      until: node_count.stdout | int >= (groups['k8s_cluster'] | length)
+      retries: 30
+      delay: 10
+      when: inventory_hostname in groups['kube_control_plane']
+      
+    - name: Verify cluster status
+      shell: kubectl get nodes -o wide
+      when: inventory_hostname in groups['kube_control_plane']

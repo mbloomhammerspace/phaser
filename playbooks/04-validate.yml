@@ -1,0 +1,273 @@
+---
+- name: Validate Kubernetes RAG Installation
+  hosts: kube_control_plane
+  become: false
+  gather_facts: false
+  
+  vars:
+    rag_namespace: "rag-system"
+    milvus_namespace: "milvus"
+    nemo_namespace: "nemo-system"
+    observability_namespace: "observability"
+    gpu_operator_namespace: "gpu-operator-resources"
+    
+  tasks:
+    - name: Validate Kubernetes cluster
+      shell: |
+        echo "=== Kubernetes Cluster Validation ==="
+        kubectl cluster-info
+        echo ""
+        echo "=== Node Status ==="
+        kubectl get nodes -o wide
+        echo ""
+        echo "=== All Pods Status ==="
+        kubectl get pods --all-namespaces --field-selector=status.phase!=Running
+      register: cluster_validation
+      
+    - name: Display cluster validation results
+      debug:
+        msg: "{{ cluster_validation.stdout }}"
+        
+    - name: Validate GPU Operator
+      shell: |
+        echo "=== GPU Operator Validation ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -o wide
+        echo ""
+        echo "=== GPU Nodes ==="
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,GPU:.status.allocatable.'nvidia\.com/gpu',READY:.status.conditions[?(@.type=="Ready")].status
+        echo ""
+        echo "=== GPU Device Plugin ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -l app=nvidia-device-plugin-daemonset -o wide
+        echo ""
+        echo "=== DCGM Exporter ==="
+        kubectl get pods -n {{ gpu_operator_namespace }} -l app=nvidia-dcgm-exporter -o wide
+      register: gpu_validation
+      
+    - name: Display GPU validation results
+      debug:
+        msg: "{{ gpu_validation.stdout }}"
+        
+    - name: Validate Milvus
+      shell: |
+        echo "=== Milvus Validation ==="
+        kubectl get pods -n {{ milvus_namespace }} -o wide
+        echo ""
+        echo "=== Milvus Services ==="
+        kubectl get svc -n {{ milvus_namespace }}
+        echo ""
+        echo "=== Milvus Persistent Volumes ==="
+        kubectl get pvc -n {{ milvus_namespace }}
+      register: milvus_validation
+      
+    - name: Display Milvus validation results
+      debug:
+        msg: "{{ milvus_validation.stdout }}"
+        
+    - name: Validate NeMo Services
+      shell: |
+        echo "=== NeMo Services Validation ==="
+        kubectl get pods -n {{ nemo_namespace }} -o wide
+        echo ""
+        echo "=== NeMo Services ==="
+        kubectl get svc -n {{ nemo_namespace }}
+      register: nemo_validation
+      
+    - name: Display NeMo validation results
+      debug:
+        msg: "{{ nemo_validation.stdout }}"
+        
+    - name: Validate RAG Services
+      shell: |
+        echo "=== RAG Services Validation ==="
+        kubectl get pods -n {{ rag_namespace }} -o wide
+        echo ""
+        echo "=== RAG Services ==="
+        kubectl get svc -n {{ rag_namespace }}
+        echo ""
+        echo "=== RAG Ingress ==="
+        kubectl get ingress -n {{ rag_namespace }} 2>/dev/null || echo "No ingress found"
+      register: rag_validation
+      
+    - name: Display RAG validation results
+      debug:
+        msg: "{{ rag_validation.stdout }}"
+        
+    - name: Validate Observability Services
+      shell: |
+        echo "=== Observability Services Validation ==="
+        kubectl get pods -n {{ observability_namespace }} -o wide
+        echo ""
+        echo "=== Observability Services ==="
+        kubectl get svc -n {{ observability_namespace }}
+        echo ""
+        echo "=== Attu Status ==="
+        kubectl get pods -n {{ milvus_namespace }} -l app=attu -o wide
+        kubectl get svc -n {{ milvus_namespace }} -l app=attu
+      register: observability_validation
+      
+    - name: Display observability validation results
+      debug:
+        msg: "{{ observability_validation.stdout }}"
+        
+    - name: Test GPU functionality
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: gpu-validation-test
+            namespace: default
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: gpu-test
+              image: nvcr.io/nvidia/cuda:11.8.0-base-ubuntu20.04
+              command: ["nvidia-smi"]
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+      register: gpu_test_pod
+      
+    - name: Wait for GPU test to complete
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: gpu-validation-test
+        namespace: default
+      register: gpu_test_status
+      until: gpu_test_status.resources[0].status.phase in ['Succeeded', 'Failed']
+      retries: 30
+      delay: 10
+      
+    - name: Get GPU test results
+      shell: kubectl logs gpu-validation-test
+      register: gpu_test_logs
+      
+    - name: Display GPU test results
+      debug:
+        msg: "GPU validation test results: {{ gpu_test_logs.stdout }}"
+        
+    - name: Clean up GPU test pod
+      kubernetes.core.k8s:
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: gpu-validation-test
+            namespace: default
+            
+    - name: Test Milvus connectivity
+      shell: |
+        # Test Milvus connection
+        kubectl run milvus-test --image=curlimages/curl -i --rm --restart=Never -- \
+          curl -s http://milvus.{{ milvus_namespace }}.svc.cluster.local:9091/health
+      register: milvus_connectivity_test
+      ignore_errors: true
+      
+    - name: Display Milvus connectivity test results
+      debug:
+        msg: "Milvus connectivity test: {{ milvus_connectivity_test.stdout }}"
+        
+    - name: Test RAG API endpoints
+      shell: |
+        echo "=== Testing RAG API Endpoints ==="
+        
+        # Test RAG Server health
+        echo "Testing RAG Server health..."
+        curl -s http://localhost:30080/health || echo "RAG Server health check failed"
+        
+        # Test RAG Playground
+        echo "Testing RAG Playground..."
+        curl -s http://localhost:30081/ || echo "RAG Playground check failed"
+        
+        # Test Ingestor Server
+        echo "Testing Ingestor Server..."
+        curl -s http://localhost:30082/health || echo "Ingestor Server health check failed"
+        
+        # Test Observability endpoints
+        echo "Testing Observability endpoints..."
+        echo "Testing Jaeger..."
+        curl -s http://localhost:30668/ || echo "Jaeger check failed"
+        echo "Testing Zipkin..."
+        curl -s http://localhost:30669/ || echo "Zipkin check failed"
+        echo "Testing Attu..."
+        curl -s http://localhost:30670/ || echo "Attu check failed"
+        echo "Testing Grafana..."
+        curl -s http://localhost:30671/ || echo "Grafana check failed"
+      register: rag_api_test
+      ignore_errors: true
+      
+    - name: Display RAG API test results
+      debug:
+        msg: "{{ rag_api_test.stdout }}"
+        
+    - name: Generate comprehensive validation report
+      shell: |
+        echo "=== COMPREHENSIVE VALIDATION REPORT ===" > /tmp/validation_report.txt
+        echo "Generated: $(date)" >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== CLUSTER STATUS ===" >> /tmp/validation_report.txt
+        kubectl get nodes -o wide >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== GPU STATUS ===" >> /tmp/validation_report.txt
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,GPU:.status.allocatable.'nvidia\.com/gpu' >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== ALL SERVICES STATUS ===" >> /tmp/validation_report.txt
+        kubectl get pods --all-namespaces -o wide >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== SERVICES ===" >> /tmp/validation_report.txt
+        kubectl get svc --all-namespaces >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== PERSISTENT VOLUMES ===" >> /tmp/validation_report.txt
+        kubectl get pvc --all-namespaces >> /tmp/validation_report.txt
+        echo "" >> /tmp/validation_report.txt
+        
+        echo "=== EVENTS (Last 50) ===" >> /tmp/validation_report.txt
+        kubectl get events --all-namespaces --sort-by=.metadata.creationTimestamp | tail -50 >> /tmp/validation_report.txt
+        
+        cat /tmp/validation_report.txt
+      register: validation_report
+      
+    - name: Display validation report
+      debug:
+        msg: "{{ validation_report.stdout }}"
+        
+    - name: Check for any failed pods
+      shell: |
+        kubectl get pods --all-namespaces --field-selector=status.phase!=Running -o wide
+      register: failed_pods
+      
+    - name: Display failed pods (if any)
+      debug:
+        msg: "{{ failed_pods.stdout }}"
+      when: failed_pods.stdout != ""
+      
+    - name: Final validation summary
+      debug:
+        msg: |
+          === VALIDATION SUMMARY ===
+          
+          Cluster Status: {{ 'OK' if cluster_validation.rc == 0 else 'FAILED' }}
+          GPU Operator: {{ 'OK' if gpu_validation.rc == 0 else 'FAILED' }}
+          Milvus: {{ 'OK' if milvus_validation.rc == 0 else 'FAILED' }}
+          NeMo Services: {{ 'OK' if nemo_validation.rc == 0 else 'FAILED' }}
+          RAG Services: {{ 'OK' if rag_validation.rc == 0 else 'FAILED' }}
+          Observability: {{ 'OK' if observability_validation.rc == 0 else 'FAILED' }}
+          
+          Access URLs:
+          - RAG Playground: http://{{ ansible_default_ipv4.address }}:30081
+          - RAG API: http://{{ ansible_default_ipv4.address }}:30080
+          - Ingestor API: http://{{ ansible_default_ipv4.address }}:30082
+          - Milvus: http://{{ ansible_default_ipv4.address }}:30090
+          - Attu (Milvus UI): http://{{ ansible_default_ipv4.address }}:30670
+          - Jaeger (Tracing): http://{{ ansible_default_ipv4.address }}:30668
+          - Zipkin (Tracing): http://{{ ansible_default_ipv4.address }}:30669
+          - Grafana (Monitoring): http://{{ ansible_default_ipv4.address }}:30671
+          
+          Validation Report: /tmp/validation_report.txt

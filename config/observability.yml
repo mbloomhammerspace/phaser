@@ -1,0 +1,138 @@
+# Observability Configuration for Kubernetes RAG Installer
+# This file contains configuration for all observability components
+
+observability:
+  namespace: "observability"
+  enabled: true
+  
+  # OpenTelemetry Configuration
+  opentelemetry:
+    enabled: true
+    version: "0.45.0"
+    mode: "daemonset"
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: "0.0.0.0:4317"
+            http:
+              endpoint: "0.0.0.0:4318"
+      processors:
+        batch:
+          timeout: "1s"
+          send_batch_size: 1024
+      exporters:
+        otlp:
+          endpoint: "http://jaeger-collector:4317"
+          tls:
+            insecure: true
+        logging:
+          verbosity: "detailed"
+      service:
+        pipelines:
+          traces:
+            receivers: ["otlp"]
+            processors: ["batch"]
+            exporters: ["otlp", "logging"]
+          metrics:
+            receivers: ["otlp"]
+            processors: ["batch"]
+            exporters: ["otlp", "logging"]
+          logs:
+            receivers: ["otlp"]
+            processors: ["batch"]
+            exporters: ["otlp", "logging"]
+  
+  # Jaeger Configuration
+  jaeger:
+    enabled: true
+    version: "0.76.0"
+    storage:
+      type: "memory"
+      options:
+        memory:
+          max_traces: 50000
+    query:
+      service:
+        type: "NodePort"
+        nodePort: 30668
+    collector:
+      service:
+        type: "ClusterIP"
+    agent:
+      enabled: false
+  
+  # Zipkin Configuration
+  zipkin:
+    enabled: true
+    version: "0.3.0"
+    service:
+      type: "NodePort"
+      nodePort: 30669
+    persistence:
+      enabled: true
+      size: "10Gi"
+    resources:
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+  
+  # Attu Configuration (Milvus Management UI)
+  attu:
+    enabled: true
+    image: "zilliz/attu:latest"
+    service:
+      type: "NodePort"
+      nodePort: 30670
+    resources:
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+    env:
+      MILVUS_URL: "http://milvus-standalone:19121"
+      HOST_URL: "http://0.0.0.0:3000"
+  
+  # Prometheus + Grafana Configuration
+  prometheus:
+    enabled: true
+    version: "55.0.0"
+    retention: "7d"
+    storage:
+      size: "50Gi"
+    grafana:
+      enabled: true
+      service:
+        type: "NodePort"
+        nodePort: 30671
+      adminPassword: "admin"
+      dashboards:
+        milvus:
+          gnetId: 13332
+          revision: 1
+          datasource: "Prometheus"
+        kubernetes:
+          gnetId: 315
+          revision: 3
+          datasource: "Prometheus"
+        nvidia_gpu:
+          gnetId: 14574
+          revision: 1
+          datasource: "Prometheus"
+
+# Service Ports Summary
+ports:
+  jaeger: 30668
+  zipkin: 30669
+  attu: 30670
+  grafana: 30671
+  rag_playground: 30081
+  rag_api: 30080
+  ingestor_api: 30082
+  milvus: 30090

@@ -1,0 +1,22 @@
+# Sample nodes file for preflight discovery
+# Format: hostname:ip_address:username
+# Lines starting with # are comments
+
+# Example nodes (replace with your actual nodes)
+# master1:192.168.1.10:ubuntu
+# worker1:192.168.1.11:ubuntu
+# worker2:192.168.1.12:ubuntu
+
+# Development cluster example
+# dev-master:10.0.1.10:ubuntu
+# dev-worker1:10.0.1.11:ubuntu
+# dev-worker2:10.0.1.12:ubuntu
+
+# Production cluster example
+# prod-master1:10.0.10.10:ubuntu
+# prod-master2:10.0.10.11:ubuntu
+# prod-master3:10.0.10.12:ubuntu
+# prod-worker1:10.0.10.20:ubuntu
+# prod-worker2:10.0.10.21:ubuntu
+# prod-gpu1:10.0.10.30:ubuntu
+# prod-gpu2:10.0.10.31:ubuntu

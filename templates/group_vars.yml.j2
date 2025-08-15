@@ -1,0 +1,34 @@
+# Kubespray Configuration
+kube_version: v1.28.0
+container_manager: containerd
+network_plugin: calico
+dns_mode: coredns
+helm_enabled: true
+metrics_server_enabled: true
+local_path_provisioner_enabled: true
+
+# Container runtime
+containerd_config:
+  version: 1.6.21
+  systemd_cgroup: true
+
+# Network configuration
+calico_version: v3.26.1
+calico_ipv4pool_ipip: "CrossSubnet"
+calico_ipv4pool_vxlan: "Never"
+
+# Storage
+local_volume_provisioner_enabled: true
+local_volume_provisioner_base_path: /mnt/disks
+
+# Security
+podsecuritypolicy_enabled: false
+rbac_enabled: true
+
+# Monitoring
+prometheus_enabled: true
+grafana_enabled: true
+
+# GPU support
+nvidia_gpu_enabled: true
+nvidia_driver_enabled: true
