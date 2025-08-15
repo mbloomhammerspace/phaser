@@ -59,10 +59,12 @@
               persistentVolumeClaim:
                 enabled: true
                 size: 100Gi
+                storageClassName: default
             logs:
               persistentVolumeClaim:
                 enabled: true
                 size: 20Gi
+                storageClassName: default
           gpu:
             enabled: true
             resources:
@@ -573,7 +575,7 @@
               storageSpec:
                 volumeClaimTemplate:
                   spec:
-                    storageClassName: ""
+                    storageClassName: default
                     accessModes: ["ReadWriteOnce"]
                     resources:
                       requests:
