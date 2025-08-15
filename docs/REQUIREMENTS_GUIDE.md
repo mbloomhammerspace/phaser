@@ -87,16 +87,21 @@ This guide provides comprehensive requirements for deploying the Kubernetes RAG 
 | **NVIDIA V100** | 16GB/32GB | 5,120 | Development/Testing |
 | **NVIDIA RTX 4090** | 24GB | 16,384 | Development/Testing |
 | **NVIDIA RTX 4080** | 16GB | 9,728 | Development/Testing |
+| **NVIDIA M6000** | 24GB | 3,072 | Development/Testing |
+| **NVIDIA L40** | 48GB | 18,176 | Production RAG |
+| **NVIDIA T4** | 16GB | 2,560 | Development/Testing |
+| **NVIDIA L4** | 24GB | 7,424 | Development/Testing |
+| **NVIDIA RTX 6000 Ada** | 48GB | 18,176 | Production RAG |
 
 #### **GPU Requirements by Use Case**
 
-| Use Case | Minimum VRAM | Recommended VRAM | GPU Count |
-|----------|--------------|------------------|-----------|
-| **Development** | 8GB | 16GB | 1 |
-| **Testing** | 16GB | 24GB | 1-2 |
-| **Production (Small)** | 24GB | 40GB | 2-4 |
-| **Production (Large)** | 40GB | 80GB | 4-8 |
-| **Enterprise** | 80GB | 80GB+ | 8+ |
+| Use Case | Minimum VRAM | Recommended VRAM | GPU Count | Recommended GPUs |
+|----------|--------------|------------------|-----------|------------------|
+| **Development** | 8GB | 16GB | 1 | T4, RTX 4080, M6000 |
+| **Testing** | 16GB | 24GB | 1-2 | RTX 4090, M6000, L4 |
+| **Production (Small)** | 24GB | 40GB | 2-4 | A100, L40, RTX 6000 Ada |
+| **Production (Large)** | 40GB | 80GB | 4-8 | A100, H100 |
+| **Enterprise** | 80GB | 80GB+ | 8+ | H100 |
 
 ## Software Requirements
 

@@ -95,7 +95,7 @@ An automated, production-ready installer that deploys a complete RAG ecosystem o
 - **Hardware**: Minimum 4 CPU cores, 8GB RAM per node
 - **Network**: 1Gbps+ connectivity between nodes
 - **Storage**: 50GB+ per node, NVMe/SSD preferred
-- **GPU**: NVIDIA GPUs with 8GB+ VRAM for GPU workloads
+- **GPU**: NVIDIA GPUs with 8GB+ VRAM for GPU workloads (A100, H100, V100, RTX 4090/4080, M6000, L40, T4, L4, RTX 6000 Ada)
 - **OS**: Ubuntu 20.04+ or CentOS 8+
 
 ### 🎯 **Future Roadmap**

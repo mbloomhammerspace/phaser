@@ -436,10 +436,16 @@ class PreflightChecker:
             priority_score += 20
             if node.total_gpu_memory_gb >= 80:
                 priority_score += 15
+            elif node.total_gpu_memory_gb >= 48:
+                priority_score += 12
             elif node.total_gpu_memory_gb >= 40:
                 priority_score += 10
+            elif node.total_gpu_memory_gb >= 24:
+                priority_score += 8
             elif node.total_gpu_memory_gb >= 16:
                 priority_score += 5
+            elif node.total_gpu_memory_gb >= 8:
+                priority_score += 3
         
         # Determine role
         if node.gpu_count > 0:
@@ -662,6 +668,16 @@ class PreflightChecker:
             return 'RTX4090'
         elif 'rtx 4080' in gpu_name:
             return 'RTX4080'
+        elif 'm6000' in gpu_name:
+            return 'M6000'
+        elif 'l40' in gpu_name:
+            return 'L40'
+        elif 't4' in gpu_name:
+            return 'T4'
+        elif 'l4' in gpu_name:
+            return 'L4'
+        elif 'rtx 6000' in gpu_name:
+            return 'RTX6000'
         else:
             return 'Other'
     

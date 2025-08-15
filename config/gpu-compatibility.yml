@@ -1,0 +1,175 @@
+gpu_compatibility:
+  # High-end Production GPUs
+  a100:
+    vram_gb: 40
+    cuda_cores: 6912
+    architecture: "Ampere"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "MIG support"
+      - "Multi-instance GPU"
+      - "Optimal for large models"
+      - "Production RAG workloads"
+    recommended_use: "Production RAG"
+    
+  h100:
+    vram_gb: 80
+    cuda_cores: 16896
+    architecture: "Hopper"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "MIG support"
+      - "Transformer Engine"
+      - "Highest performance"
+      - "Enterprise workloads"
+    recommended_use: "High-performance RAG"
+    
+  # Professional Development GPUs
+  l40:
+    vram_gb: 48
+    cuda_cores: 18176
+    architecture: "Ada Lovelace"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Large VRAM"
+      - "Good for large models"
+      - "Cost-effective alternative to A100"
+    recommended_use: "Production RAG"
+    
+  rtx_6000_ada:
+    vram_gb: 48
+    cuda_cores: 18176
+    architecture: "Ada Lovelace"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Large VRAM"
+      - "Professional workstation"
+      - "Good for large models"
+    recommended_use: "Production RAG"
+    
+  # Development and Testing GPUs
+  v100:
+    vram_gb: 16
+    cuda_cores: 5120
+    architecture: "Volta"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Tensor Cores"
+      - "Good for development"
+      - "Stable performance"
+    recommended_use: "Development/Testing"
+    
+  m6000:
+    vram_gb: 24
+    cuda_cores: 3072
+    architecture: "Maxwell"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Large VRAM for age"
+      - "Good for development"
+      - "Cost-effective"
+    recommended_use: "Development/Testing"
+    
+  l4:
+    vram_gb: 24
+    cuda_cores: 7424
+    architecture: "Ada Lovelace"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Efficient power usage"
+      - "Good for development"
+      - "Cloud-optimized"
+    recommended_use: "Development/Testing"
+    
+  rtx_4090:
+    vram_gb: 24
+    cuda_cores: 16384
+    architecture: "Ada Lovelace"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "High performance"
+      - "Good for development"
+      - "Consumer-grade"
+    recommended_use: "Development/Testing"
+    
+  rtx_4080:
+    vram_gb: 16
+    cuda_cores: 9728
+    architecture: "Ada Lovelace"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Good performance"
+      - "Cost-effective"
+      - "Consumer-grade"
+    recommended_use: "Development/Testing"
+    
+  t4:
+    vram_gb: 16
+    cuda_cores: 2560
+    architecture: "Turing"
+    driver_version: "535.154.05+"
+    cuda_version: "11.8+"
+    cudnn_version: "8.6+"
+    container_toolkit_version: "1.15.5-ubuntu20.04"
+    gpu_operator_version: "v23.9.0"
+    features:
+      - "Efficient power usage"
+      - "Cloud-optimized"
+      - "Good for inference"
+    recommended_use: "Development/Testing"
+
+# Resource recommendations by GPU type
+resource_recommendations:
+  high_vram_gpus:  # 40GB+ (A100, H100, L40, RTX 6000 Ada)
+    memory_limit: "32Gi"
+    memory_request: "16Gi"
+    cpu_limit: "8"
+    cpu_request: "4"
+    
+  medium_vram_gpus:  # 24GB (M6000, L4, RTX 4090)
+    memory_limit: "20Gi"
+    memory_request: "10Gi"
+    cpu_limit: "6"
+    cpu_request: "3"
+    
+  low_vram_gpus:  # 16GB (V100, RTX 4080, T4)
+    memory_limit: "12Gi"
+    memory_request: "6Gi"
+    cpu_limit: "4"
+    cpu_request: "2"

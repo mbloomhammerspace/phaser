@@ -63,7 +63,7 @@ Before installing the Kubernetes RAG system, ensure you have the following softw
 ### **GPU Requirements**
 
 For GPU-enabled nodes:
-- **NVIDIA GPU**: A100, H100, V100, or RTX 4090/4080
+- **NVIDIA GPU**: A100, H100, V100, RTX 4090/4080, M6000, L40, T4, L4, RTX 6000 Ada
 - **GPU Memory**: Minimum 8GB (24GB+ recommended)
 - **NVIDIA Driver**: 535.154.05 or higher
 - **CUDA**: 11.8 or higher
