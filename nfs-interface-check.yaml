@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-interface-check
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: worker-node-1
+  containers:
+  - name: interface-check
+    image: busybox
+    command: ["sh", "-c", "ping -c 1 132.145.203.0 && echo 'NFS server reachable' && nslookup 132.145.203.0 || echo 'nslookup failed'"]
+  restartPolicy: Never

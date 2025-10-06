@@ -1,0 +1,8 @@
+spec:
+  template:
+    spec:
+      containers:
+      - name: rag-server
+        env:
+        - name: APP_EMBEDDINGS_SERVERURL
+          value: "http://ingestor-server:8082"

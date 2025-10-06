@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-collections-configmap
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: check
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install pymilvus
+        python3 /scripts/check_collections.py
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: script-volume
+    configMap:
+      name: check-collections-script-configmap
+      defaultMode: 0755
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: check-collections-script-configmap
+data:
+  check_collections.py: |
+    #!/usr/bin/env python3
+
+    from pymilvus import connections, utility, Collection
+
+    print('Connecting to Milvus...')
+    connections.connect('default', host='milvus', port='19530')
+    print('Connected successfully!')
+
+    print('Listing collections...')
+    collections = utility.list_collections()
+    print('Found', len(collections), 'collections:')
+    for col in collections:
+        print('  -', col)
+
+    print('Checking hammerspace_docs collection...')
+    if 'hammerspace_docs' in collections:
+        collection = Collection('hammerspace_docs')
+        print('hammerspace_docs exists with', collection.num_entities, 'entities')
+        
+        # Check collection schema
+        schema = collection.schema
+        print('Collection schema:')
+        for field in schema.fields:
+            print('  -', field.name, ':', field.dtype, '(dim:', field.params.get('dim', 'N/A'), ')')
+        
+        # Check if collection is loaded
+        if collection.has_index():
+            print('Collection has index')
+        else:
+            print('Collection does not have index')
+            
+        # Try to load the collection
+        try:
+            collection.load()
+            print('Collection loaded successfully')
+            print('Collection now has', collection.num_entities, 'entities')
+        except Exception as e:
+            print('Error loading collection:', e)
+    else:
+        print('hammerspace_docs collection not found!')
+
+    print('Check complete!')

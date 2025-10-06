@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-grpc-gateway
+  labels:
+    app: milvus-grpc-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-grpc-gateway
+  template:
+    metadata:
+      labels:
+        app: milvus-grpc-gateway
+    spec:
+      containers:
+      - name: grpc-gateway
+        image: grpc/gateway:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - >
+          while true; do
+            echo "gRPC Gateway is running...";
+            sleep 30;
+          done
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: MILVUS_TARGET
+          value: "milvus-gpu:19530"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-grpc-gateway
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30006
+    protocol: TCP
+  selector:
+    app: milvus-grpc-gateway

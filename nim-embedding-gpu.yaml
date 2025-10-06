@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nim-embedding-gpu
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nim-embedding-gpu
+  template:
+    metadata:
+      labels:
+        app: nim-embedding-gpu
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      serviceAccountName: rag-server-sa
+      containers:
+      - name: nim-embedding
+        image: nvcr.io/nvidia/nim/nim-embedding:25.6.2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        - name: NIM_MODEL_PROFILE
+          value: "nvidia/embed-qa-4"
+        - name: NIM_PORT
+          value: "8000"
+        - name: NIM_HOST
+          value: "0.0.0.0"
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+          limits:
+            nvidia.com/gpu: "1"
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-embedding-gpu
+  namespace: default
+spec:
+  selector:
+    app: nim-embedding-gpu
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP

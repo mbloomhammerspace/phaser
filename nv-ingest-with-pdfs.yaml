@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nv-ingest-paddle
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nv-ingest-paddle
+  template:
+    metadata:
+      labels:
+        app: nv-ingest-paddle
+    spec:
+      containers:
+      - name: nv-ingest-paddle
+        image: nvcr.io/nvidia/nim/nv-ingest:24.10
+        imagePullPolicy: Always
+        env:
+        - name: NIM_MODEL_PROFILE
+          value: "6097695b532c9abe549de9918de6b4702eda625f27b508acd7b7dcc04f38ebe1"
+        - name: MESSAGE_CLIENT_HOST
+          value: "10.233.8.206"  # Redis IP
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+          requests:
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - mountPath: /opt/nim/.cache
+          name: model-store
+        - mountPath: /dev/shm
+          name: dshm
+        - mountPath: /data/pdf-test
+          name: blueprint-storage
+          subPath: pdf-test
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: ngc-secret
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsUser: 1000
+      serviceAccount: default
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: dshm
+      - emptyDir: {}
+        name: model-store
+      - name: blueprint-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage

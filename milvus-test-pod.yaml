@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-test-external-etcd
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests && python3 -c \"
+import requests
+import time
+
+MILVUS_HOST = 'milvus-external-etcd-clean'
+MILVUS_HTTP_PORT = 9091
+
+print('=== Testing Milvus with External etcd ===')
+print(f'Host: {MILVUS_HOST}')
+print(f'HTTP Port: {MILVUS_HTTP_PORT}')
+
+# Test HTTP health endpoint
+try:
+    response = requests.get(f'http://{MILVUS_HOST}:{MILVUS_HTTP_PORT}/healthz', timeout=10)
+    response.raise_for_status()
+    print(f'✓ HTTP health check successful: {response.status_code}')
+except Exception as e:
+    print(f'✗ HTTP health check failed: {e}')
+
+# Test collections endpoint
+try:
+    response = requests.get(f'http://{MILVUS_HOST}:{MILVUS_HTTP_PORT}/collections', timeout=10)
+    response.raise_for_status()
+    print(f'✓ Collections endpoint accessible: {response.status_code}')
+    print(f'Collections: {response.text}')
+except Exception as e:
+    print(f'✗ Collections endpoint failed: {e}')
+
+print('=== Milvus External etcd Test Complete ===')
+\""]

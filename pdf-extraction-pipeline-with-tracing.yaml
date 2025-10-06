@@ -1,0 +1,226 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pdf-extraction
+  labels:
+    name: pdf-extraction
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-processor
+  namespace: pdf-extraction
+  labels:
+    app: pdf-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdf-processor
+  template:
+    metadata:
+      labels:
+        app: pdf-processor
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu-worker-node
+      tolerations:
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: pdf-processor
+        image: python:3.9-slim
+        command: ["/bin/bash"]
+        args: ["-c", "pip install pymilvus pypdf2 sentence-transformers torch opentelemetry-api opentelemetry-sdk opentelemetry-instrumentation opentelemetry-instrumentation-pymilvus opentelemetry-exporter-zipkin && sleep infinity"]
+        env:
+        - name: MILVUS_HOST
+          value: "milvus.default.svc.cluster.local"
+        - name: MILVUS_PORT
+          value: "19530"
+        - name: OTEL_EXPORTER_ZIPKIN_ENDPOINT
+          value: "http://otel-collector:9411/api/v2/spans"
+        - name: OTEL_SERVICE_NAME
+          value: "pdf-processor"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=pdf-processor,service.version=1.0.0"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "4Gi"
+            cpu: "2"
+          requests:
+            nvidia.com/gpu: 1
+            memory: "2Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: pdf-storage
+          mountPath: /pdfs
+        - name: extraction-scripts
+          mountPath: /scripts
+      volumes:
+      - name: pdf-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      - name: extraction-scripts
+        configMap:
+          name: extraction-scripts
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extraction-scripts
+  namespace: pdf-extraction
+data:
+  extract_pdfs.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import json
+    from pathlib import Path
+    import PyPDF2
+    from sentence_transformers import SentenceTransformer
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    
+    # OpenTelemetry imports
+    from opentelemetry import trace
+    from opentelemetry.instrumentation.pymilvus import MilvusInstrumentor
+    from opentelemetry.exporter.zipkin import ZipkinExporter
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource
+    
+    # Initialize OpenTelemetry
+    resource = Resource.create({
+        "service.name": "pdf-processor",
+        "service.version": "1.0.0",
+    })
+    
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    tracer = trace.get_tracer(__name__)
+    
+    # Configure Zipkin exporter
+    zipkin_exporter = ZipkinExporter(
+        endpoint="http://otel-collector:9411/api/v2/spans"
+    )
+    
+    # Add span processor
+    span_processor = BatchSpanProcessor(zipkin_exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
+    
+    # Instrument Milvus
+    MilvusInstrumentor().instrument()
+    
+    # Connect to Milvus
+    connections.connect("default", host="milvus.default.svc.cluster.local", port="19530")
+    
+    # Initialize sentence transformer model
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    def extract_text_from_pdf(pdf_path):
+        """Extract text from PDF file with tracing"""
+        with tracer.start_as_current_span("extract_text_from_pdf") as span:
+            span.set_attribute("pdf.file", str(pdf_path))
+            text_content = []
+            try:
+                with open(pdf_path, 'rb') as file:
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    span.set_attribute("pdf.pages", len(pdf_reader.pages))
+                    
+                    for page_num, page in enumerate(pdf_reader.pages):
+                        with tracer.start_as_current_span("extract_page_text") as page_span:
+                            page_span.set_attribute("page.number", page_num + 1)
+                            text = page.extract_text()
+                            if text.strip():
+                                text_content.append({
+                                    'page_number': page_num + 1,
+                                    'text': text.strip()
+                                })
+                                page_span.set_attribute("text.length", len(text.strip()))
+            except Exception as e:
+                span.set_attribute("error", str(e))
+                print(f"Error processing {pdf_path}: {e}")
+            return text_content
+    
+    def process_pdfs(pdf_directory):
+        """Process all PDFs in directory with tracing"""
+        with tracer.start_as_current_span("process_pdfs") as span:
+            span.set_attribute("pdf.directory", pdf_directory)
+            pdf_dir = Path(pdf_directory)
+            pdf_files = list(pdf_dir.glob("*.pdf"))
+            
+            if not pdf_files:
+                print(f"No PDF files found in {pdf_directory}")
+                return
+            
+            span.set_attribute("pdf.count", len(pdf_files))
+            print(f"Found {len(pdf_files)} PDF files to process")
+            
+            for pdf_file in pdf_files:
+                with tracer.start_as_current_span("process_single_pdf") as file_span:
+                    file_span.set_attribute("pdf.filename", pdf_file.name)
+                    print(f"Processing: {pdf_file.name}")
+                    text_content = extract_text_from_pdf(pdf_file)
+                    
+                    if not text_content:
+                        print(f"No text extracted from {pdf_file.name}")
+                        continue
+                    
+                    # Prepare data for insertion
+                    data = []
+                    for page_data in text_content:
+                        with tracer.start_as_current_span("generate_embedding") as embed_span:
+                            embed_span.set_attribute("text.length", len(page_data['text']))
+                            # Generate embedding
+                            embedding = model.encode(page_data['text']).tolist()
+                            embed_span.set_attribute("embedding.dimension", len(embedding))
+                            
+                            data.append({
+                                'filename': pdf_file.name,
+                                'page_number': page_data['page_number'],
+                                'text': page_data['text'],
+                                'embedding': embedding
+                            })
+                    
+                    # Insert into Milvus
+                    with tracer.start_as_current_span("insert_to_milvus") as insert_span:
+                        insert_span.set_attribute("records.count", len(data))
+                        collection.insert(data)
+                        print(f"Inserted {len(data)} pages from {pdf_file.name}")
+            
+            # Flush collection
+            with tracer.start_as_current_span("flush_collection") as flush_span:
+                collection.flush()
+                print("All PDFs processed successfully!")
+    
+    # Create collection if it doesn't exist
+    collection_name = "pdf_embeddings"
+    if not utility.has_collection(collection_name):
+        with tracer.start_as_current_span("create_collection") as create_span:
+            create_span.set_attribute("collection.name", collection_name)
+            fields = [
+                FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                FieldSchema(name="filename", dtype=DataType.VARCHAR, max_length=255),
+                FieldSchema(name="page_number", dtype=DataType.INT64),
+                FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
+                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=384)
+            ]
+            schema = CollectionSchema(fields, "PDF document embeddings")
+            collection = Collection(collection_name, schema)
+            
+            # Create index
+            index_params = {
+                "metric_type": "L2",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 1024}
+            }
+            collection.create_index("embedding", index_params)
+    else:
+        collection = Collection(collection_name)
+    
+    if __name__ == "__main__":
+        pdf_dir = "/pdfs/pdf-test"
+        if len(sys.argv) > 1:
+            pdf_dir = sys.argv[1]
+        
+        process_pdfs(pdf_dir)

@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-milvus-connection
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-client
+    image: python:3.9-slim
+    command: ["/bin/bash"]
+    args: ["-c", "pip install pymilvus && python -c \"
+import time
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+
+print('Testing Milvus connection...')
+try:
+    connections.connect('default', host='milvus', port='19530')
+    print('✓ Connected to Milvus successfully!')
+    
+    # Test creating a simple collection
+    collection_name = 'test_collection'
+    if utility.has_collection(collection_name):
+        utility.drop_collection(collection_name)
+    
+    fields = [
+        FieldSchema(name='id', dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name='text', dtype=DataType.VARCHAR, max_length=100),
+        FieldSchema(name='embedding', dtype=DataType.FLOAT_VECTOR, dim=128)
+    ]
+    schema = CollectionSchema(fields, 'Test collection')
+    collection = Collection(collection_name, schema)
+    print('✓ Collection created successfully!')
+    
+    # Insert test data
+    data = [
+        ['Hello', 'World'],
+        [[0.1]*128, [0.2]*128]
+    ]
+    collection.insert(data)
+    collection.flush()
+    print('✓ Data inserted successfully!')
+    
+    print('🎉 Milvus is working correctly!')
+    
+except Exception as e:
+    print(f'✗ Error: {e}')
+    exit(1)
+\""]

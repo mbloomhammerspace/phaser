@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-simple-curl
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Testing RAG server health endpoint..."
+        wget -qO- http://rag-server:8081/health || echo "Health endpoint failed"
+        
+        echo ""
+        echo "Testing RAG server docs endpoint..."
+        wget -qO- http://rag-server:8081/docs | head -5 || echo "Docs endpoint failed"
+        
+        echo ""
+        echo "Testing RAG server root endpoint..."
+        wget -qO- http://rag-server:8081/ | head -5 || echo "Root endpoint failed"

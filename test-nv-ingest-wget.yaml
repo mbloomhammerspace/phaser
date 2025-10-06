@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nv-ingest-wget
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:latest
+    command: ["sh", "-c", "echo '=== Testing NVIDIA nv-ingest API ==='; echo 'Testing health endpoint...'; wget -qO- http://nv-ingest-simple-api:8080/health 2>/dev/null || echo 'Health endpoint failed'; echo ''; echo 'Testing common endpoints...'; for endpoint in /ingest /upload /documents /docs /add /index /api/v1/ingest /api/ingest; do echo \"Testing \$endpoint...\"; wget -qO- http://nv-ingest-simple-api:8080\$endpoint 2>/dev/null | head -c 100 || echo \"  \$endpoint failed\"; echo ''; done; echo '=== API Test Complete ==='"]

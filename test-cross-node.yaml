@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-cross-node
+  labels:
+    app: test-cross-node
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: test-container
+    image: busybox:1.35
+    command: ["sleep", "3600"]
+  restartPolicy: Never

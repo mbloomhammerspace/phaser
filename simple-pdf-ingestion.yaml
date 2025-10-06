@@ -1,0 +1,107 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-pdf-ingestion
+  namespace: default
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: worker-node-1
+      containers:
+      - name: pdf-ingestion
+        image: python:3.9-slim
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "Installing required packages..."
+            pip install pymilvus pypdf2 requests
+            
+            echo "Starting PDF ingestion..."
+            python3 -c "
+            import os
+            import glob
+            from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+            from PyPDF2 import PdfReader
+            import hashlib
+            
+            # Connect to Milvus
+            print('Connecting to Milvus...')
+            connections.connect('default', host='milvus-gpu', port='19530')
+            
+            # Check if collection exists
+            collection_name = 'hammerspace_docs'
+            if utility.has_collection(collection_name):
+                print(f'Collection {collection_name} already exists')
+                collection = Collection(collection_name)
+            else:
+                print(f'Creating collection {collection_name}...')
+                # Define schema
+                fields = [
+                    FieldSchema(name='id', dtype=DataType.INT64, is_primary=True, auto_id=True),
+                    FieldSchema(name='filename', dtype=DataType.VARCHAR, max_length=256),
+                    FieldSchema(name='content', dtype=DataType.VARCHAR, max_length=65535),
+                    FieldSchema(name='embedding', dtype=DataType.FLOAT_VECTOR, dim=768)
+                ]
+                schema = CollectionSchema(fields, f'Collection for {collection_name}')
+                collection = Collection(collection_name, schema)
+            
+            # Load collection
+            collection.load()
+            
+            # Process PDFs
+            pdf_dir = '/data/pdf-test'
+            pdf_files = glob.glob(os.path.join(pdf_dir, '*.pdf'))
+            
+            print(f'Found {len(pdf_files)} PDF files to process')
+            
+            for pdf_file in pdf_files:
+                try:
+                    print(f'Processing {os.path.basename(pdf_file)}...')
+                    
+                    # Read PDF
+                    reader = PdfReader(pdf_file)
+                    text = ''
+                    for page in reader.pages:
+                        text += page.extract_text()
+                    
+                    if text.strip():
+                        # Create a simple embedding (random for now)
+                        import random
+                        embedding = [random.random() for _ in range(768)]
+                        
+                        # Insert data
+                        data = [{
+                            'filename': os.path.basename(pdf_file),
+                            'content': text[:65530],  # Truncate to fit VARCHAR limit
+                            'embedding': embedding
+                        }]
+                        
+                        collection.insert(data)
+                        print(f'  Inserted {os.path.basename(pdf_file)}')
+                    else:
+                        print(f'  No text extracted from {os.path.basename(pdf_file)}')
+                        
+                except Exception as e:
+                    print(f'Error processing {pdf_file}: {e}')
+            
+            # Flush data
+            collection.flush()
+            print(f'Ingestion completed! Processed {len(pdf_files)} files')
+            "
+        volumeMounts:
+        - name: pdf-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: pdf-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      restartPolicy: Never
+  backoffLimit: 2

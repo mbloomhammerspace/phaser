@@ -1,0 +1,281 @@
+namespace: "default"
+
+# Use existing NGC secret
+imagePullSecret:
+  name: "ngc-secret"
+  create: false
+
+ngcApiSecret:
+  name: "ngc-api"
+  password: "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"
+  create: true
+
+# RAG Server Configuration
+replicaCount: 2
+
+resources:
+  limits:
+    memory: "16Gi"
+  requests:
+    memory: "8Gi"
+
+envVars:
+  # Point to our existing Milvus
+  APP_VECTORSTORE_URL: "http://milvus-gpu:19530"
+  APP_VECTORSTORE_NAME: "milvus"
+  COLLECTION_NAME: "hammerspace_docs"
+  
+  # Point to our existing Minio
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_ACCESSKEY: "minioadmin"
+  MINIO_SECRETKEY: "minioadmin"
+  
+  # Use NVIDIA hosted APIs for LLM
+  APP_LLM_MODELNAME: "nvidia/llama-3.3-nemotron-super-49b-v1"
+  APP_LLM_SERVERURL: ""
+  
+  # Use NVIDIA hosted API for embeddings
+  APP_EMBEDDINGS_SERVERURL: ""
+  APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+  
+  # Use NVIDIA hosted API for reranking
+  APP_RANKING_SERVERURL: ""
+  APP_RANKING_MODELNAME: "nvidia/llama-3.2-nv-rerankqa-1b-v2"
+  ENABLE_RERANKER: "True"
+  
+  ENABLE_CITATIONS: "True"
+  LOGLEVEL: "INFO"
+
+# Ingestor Server Configuration
+ingestor-server:
+  enabled: true
+  replicaCount: 2
+  
+  imagePullSecret:
+    name: "ngc-secret"
+    create: false
+  
+  resources:
+    limits:
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    requests:
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  
+  envVars:
+    # Point to our existing Milvus
+    APP_VECTORSTORE_URL: "http://milvus-gpu:19530"
+    APP_VECTORSTORE_NAME: "milvus"
+    COLLECTION_NAME: "hammerspace_docs"
+    APP_VECTORSTORE_ENABLEGPUINDEX: "True"
+    APP_VECTORSTORE_ENABLEGPUSEARCH: "True"
+    
+    # Point to our existing Minio
+    MINIO_ENDPOINT: "minio:9000"
+    MINIO_ACCESSKEY: "minioadmin"
+    MINIO_SECRETKEY: "minioadmin"
+    
+    # Use NVIDIA hosted API for embeddings
+    APP_EMBEDDINGS_SERVERURL: ""
+    APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+    APP_EMBEDDINGS_DIMENSIONS: "2048"
+    
+    # NV-Ingest configuration
+    APP_NVINGEST_EXTRACTTEXT: "True"
+    APP_NVINGEST_EXTRACTTABLES: "True"
+    APP_NVINGEST_EXTRACTIMAGES: "False"
+    APP_NVINGEST_EXTRACTCHARTS: "False"
+    
+    # Use NVIDIA hosted API for summarization
+    SUMMARY_LLM: "nvidia/llama-3.3-nemotron-super-49b-v1"
+    SUMMARY_LLM_SERVERURL: ""
+    
+    ENABLE_CITATIONS: "True"
+    LOGLEVEL: "INFO"
+    
+    NGC_API_KEY: "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"
+    NVIDIA_API_KEY: "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"
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+  
+  # NV-Ingest subchart (critical GPU-accelerated extraction microservice)
+  nv-ingest:
+    enabled: true
+    replicaCount: 1
+    
+    imagePullSecrets:
+      - name: "ngc-secret"
+    
+    image:
+      repository: nvcr.io/nvidia/nemo-microservices/nv-ingest
+      tag: "25.6.2"
+      pullPolicy: Always
+    
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "32Gi"
+        cpu: "8"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "16Gi"
+        cpu: "4"
+    
+    env:
+      NVIDIA_API_KEY: "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"
+      NGC_API_KEY: "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"
+      MESSAGE_CLIENT_HOST: "ingestor-server-redis-master"
+      MESSAGE_CLIENT_PORT: "6379"
+      MESSAGE_CLIENT_TYPE: "redis"
+      REDIS_HOST: "ingestor-server-redis-master"
+      REDIS_PORT: "6379"
+      CUDA_VISIBLE_DEVICES: "0"
+      LOG_LEVEL: "INFO"
+    
+    nodeSelector:
+      kubernetes.io/hostname: gpu-worker-node
+    
+    tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+    
+    # Disable embedded services from nv-ingest (we use our own)
+    milvusDeployed: false
+    redisDeployed: true
+    zipkinDeployed: false
+    otelDeployed: false
+  
+  # Redis for task queue (required by nv-ingest)
+  redis:
+    enabled: true
+    auth:
+      enabled: false
+    master:
+      persistence:
+        enabled: false
+      resources:
+        limits:
+          memory: "4Gi"
+          cpu: "2"
+        requests:
+          memory: "2Gi"
+          cpu: "1"
+
+# Frontend (Chainlit UI)
+frontend:
+  enabled: true
+  replicaCount: 1
+
+# NIM Embedding Model (NeMo Retriever Embedding) - Disabled, use NVIDIA hosted API
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: false
+  replicaCount: 2
+  
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2
+    tag: "1.2.2"
+  
+  service:
+    port: 8000
+  
+  livenessProbe:
+    httpGet:
+      port: 8000
+  readinessProbe:
+    httpGet:
+      port: 8000
+  startupProbe:
+    httpGet:
+      port: 8000
+  
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "8Gi"
+  
+  model:
+    ngcAPIKey: "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"
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+# NIM Reranking Model - Disabled, use NVIDIA hosted API
+text-reranking-nim:
+  enabled: false
+  replicaCount: 1
+  
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-rerankqa-1b-v2
+    tag: "1.2.2"
+  
+  service:
+    port: 8000
+  
+  livenessProbe:
+    httpGet:
+      port: 8000
+  readinessProbe:
+    httpGet:
+      port: 8000
+  startupProbe:
+    httpGet:
+      port: 8000
+  
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "8Gi"
+  
+  model:
+    ngcAPIKey: "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"
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+# Disable NIM-LLM (we'll use NVIDIA hosted API instead)
+nim-llm:
+  enabled: false
+
+# Disable NIM-VLM (not needed for PDF ingestion)
+nim-vlm:
+  enabled: false
+
+# Disable observability components (we already have them)
+zipkin:
+  enabled: false
+
+opentelemetry-collector:
+  enabled: false
+
+kube-prometheus-stack:
+  enabled: false
+
+# Disable milvus subchart - we are using our existing instance
+milvus:
+  enabled: false
+
+# Disable etcd subchart - Milvus has its own
+etcd:
+
+# Disable milvus subchart - we are using our existing instance
+milvus:
+  enabled: false
+
+# Disable etcd subchart - Milvus has its own
+etcd:
+  enabled: false

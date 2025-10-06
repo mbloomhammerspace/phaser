@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pdf-ingest-test
+  namespace: default
+spec:
+  containers:
+  - name: pdf-ingest
+    image: python:3.9-slim
+    command: ["/bin/bash"]
+    args: ["-c", "pip install requests -q && python3 -c \"
+import requests
+import os
+from pathlib import Path
+
+print('=== PDF Ingestion Test ===')
+
+# Check PDF directory
+pdf_dir = Path('/mnt/iscsi/pdf-test')
+if pdf_dir.exists():
+    pdfs = list(pdf_dir.glob('*.pdf'))
+    print(f'Found {len(pdfs)} PDF files')
+    for pdf in pdfs:
+        print(f'  - {pdf.name}')
+else:
+    print(f'PDF directory {pdf_dir} not found')
+
+# Test RAG server connection
+try:
+    response = requests.get('http://rag-server:8081/health', timeout=5)
+    print(f'RAG server health: {response.status_code}')
+except Exception as e:
+    print(f'RAG server connection failed: {e}')
+
+print('=== Test Complete ===')
+\""]
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /mnt/iscsi/pdf-test
+      readOnly: true
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+  restartPolicy: Never

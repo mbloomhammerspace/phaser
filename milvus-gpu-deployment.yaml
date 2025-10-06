@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  namespace: milvus
+  labels:
+    app: milvus
+    component: standalone
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+      component: standalone
+  template:
+    metadata:
+      labels:
+        app: milvus
+        component: standalone
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu-worker-node
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.4.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_ENDPOINTS
+          value: "etcd:2379"
+        - name: MINIO_ADDRESS
+          value: "minio:9000"
+        - name: MINIO_ACCESS_KEY
+          value: "minioadmin"
+        - name: MINIO_SECRET_KEY
+          value: "minioadmin"
+        - name: COMMON_STORAGETYPE
+          value: "minio"
+        - name: GPU_ENABLED
+          value: "true"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1,2,3,4,5,6,7"
+        ports:
+        - containerPort: 19530
+          name: milvus
+        - containerPort: 9091
+          name: metrics
+        resources:
+          limits:
+            nvidia.com/gpu: 2
+            memory: "8Gi"
+            cpu: "4"
+          requests:
+            nvidia.com/gpu: 2
+            memory: "4Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+        - name: milvus-logs
+          mountPath: /var/log/milvus
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9091
+          initialDelaySeconds: 90
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9091
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: milvus-data
+        persistentVolumeClaim:
+          claimName: milvus-data
+      - name: milvus-logs
+        persistentVolumeClaim:
+          claimName: milvus-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: milvus
+  labels:
+    app: milvus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    name: milvus
+  - port: 9091
+    name: metrics
+  selector:
+    app: milvus
+    component: standalone

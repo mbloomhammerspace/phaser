@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-final-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install pymilvus requests && python3 -c \"from pymilvus import connections, list_collections; MILVUS_HOST='milvus-external-etcd-clean'; MILVUS_PORT='19530'; print(f'Connecting to Milvus at {MILVUS_HOST}:{MILVUS_PORT}'); connections.connect('default', host=MILVUS_HOST, port=MILVUS_PORT); print('✓ Milvus connection successful'); collections = list_collections(); print(f'Collections: {collections}'); print('✓ Milvus with external etcd is working properly!')\""]

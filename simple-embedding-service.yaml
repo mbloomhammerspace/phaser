@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-embedding-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-embedding-service
+  template:
+    metadata:
+      labels:
+        app: simple-embedding-service
+    spec:
+      containers:
+      - name: embedding
+        image: python:3.9-slim
+        ports:
+        - containerPort: 8000
+        command: ["python3", "-c"]
+        args:
+          - |
+            import subprocess
+            import sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn", "sentence-transformers", "numpy"])
+            
+            from fastapi import FastAPI
+            from pydantic import BaseModel
+            from sentence_transformers import SentenceTransformer
+            import uvicorn
+            import numpy as np
+            
+            app = FastAPI()
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            class EmbeddingRequest(BaseModel):
+                input: list[str]
+                model: str = "sentence-transformers/all-MiniLM-L6-v2"
+            
+            class EmbeddingResponse(BaseModel):
+                object: str = "list"
+                data: list[dict]
+                model: str
+                usage: dict
+            
+            @app.post("/v1/embeddings")
+            async def create_embeddings(request: EmbeddingRequest):
+                embeddings = model.encode(request.input)
+                data = []
+                for i, embedding in enumerate(embeddings):
+                    data.append({
+                        "object": "embedding",
+                        "index": i,
+                        "embedding": embedding.tolist()
+                    })
+                
+                return EmbeddingResponse(
+                    data=data,
+                    model=request.model,
+                    usage={
+                        "prompt_tokens": sum(len(text.split()) for text in request.input),
+                        "total_tokens": sum(len(text.split()) for text in request.input)
+                    }
+                )
+            
+            @app.get("/health")
+            async def health():
+                return {"status": "healthy"}
+            
+            if __name__ == "__main__":
+                uvicorn.run(app, host="0.0.0.0", port=8000)
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-embedding-service
+  namespace: default
+spec:
+  selector:
+    app: simple-embedding-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP

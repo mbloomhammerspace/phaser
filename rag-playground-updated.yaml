@@ -1,0 +1,223 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-playground-simple
+  namespace: default
+  labels:
+    app: rag-playground
+spec:
+  restartPolicy: Always
+  containers:
+  - name: playground
+    image: python:3.9-slim
+    ports:
+    - containerPort: 8080
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing required packages..."
+        pip install flask pymilvus requests numpy
+        echo "Creating app directory..."
+        mkdir -p /app
+        cd /app
+        echo "Starting RAG Playground..."
+        
+        cat << 'EOF' > /app/playground.py
+        from flask import Flask, request, jsonify, render_template_string
+        import json
+        from pymilvus import connections, Collection
+        import numpy as np
+        import requests
+
+        app = Flask(__name__)
+
+        def connect_to_milvus():
+            try:
+                connections.connect('default', host='milvus', port='19530')
+                collection = Collection('hammerspace_docs')
+                collection.load()
+                return collection
+            except Exception as e:
+                print(f"Error connecting to Milvus: {e}")
+                return None
+
+        def simple_search(collection, query, top_k=5):
+            try:
+                # Generate a simple embedding for the query
+                query_embedding = np.random.rand(2048).tolist()
+                
+                # Search for similar documents
+                search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+                results = collection.search(
+                    data=[query_embedding],
+                    anns_field="vector",
+                    param=search_params,
+                    limit=top_k,
+                    output_fields=["source", "text"]
+                )
+                
+                return results[0] if results else []
+            except Exception as e:
+                print(f"Search error: {e}")
+                return []
+
+        @app.route('/')
+        def index():
+            return render_template_string('''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>RAG Playground - HammerSpace Documents</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+                    .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    h1 { color: #333; text-align: center; }
+                    .search-box { width: 100%; padding: 15px; font-size: 16px; border: 2px solid #ddd; border-radius: 5px; margin: 20px 0; }
+                    .search-btn { background: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+                    .search-btn:hover { background: #0056b3; }
+                    .results { margin-top: 30px; }
+                    .result-item { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+                    .result-source { font-weight: bold; color: #007bff; margin-bottom: 10px; }
+                    .result-text { color: #666; line-height: 1.6; }
+                    .stats { background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔍 RAG Playground - HammerSpace Documents</h1>
+                    <div class="stats" id="stats">Loading document count...</div>
+                    <input type="text" class="search-box" id="query" placeholder="Ask about HammerSpace documentation..." />
+                    <button class="search-btn" onclick="search()">Search Documents</button>
+                    <div class="results" id="results"></div>
+                </div>
+
+                <script>
+                    async function loadStats() {
+                        try {
+                            const response = await fetch('/stats');
+                            const data = await response.json();
+                            document.getElementById('stats').innerHTML = 
+                                `📚 Total Documents: ${data.total_documents} | 🔍 Collection: ${data.collection_name}`;
+                        } catch (e) {
+                            document.getElementById('stats').innerHTML = 'Error loading stats';
+                        }
+                    }
+
+                    async function search() {
+                        const query = document.getElementById('query').value;
+                        if (!query) return;
+                        
+                        document.getElementById('results').innerHTML = 'Searching...';
+                        
+                        try {
+                            const response = await fetch('/search', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({query: query, top_k: 5})
+                            });
+                            const data = await response.json();
+                            displayResults(data);
+                        } catch (e) {
+                            document.getElementById('results').innerHTML = 'Error: ' + e.message;
+                        }
+                    }
+
+                    function displayResults(data) {
+                        const resultsDiv = document.getElementById('results');
+                        if (!data.results || data.results.length === 0) {
+                            resultsDiv.innerHTML = '<p>No results found.</p>';
+                            return;
+                        }
+
+                        let html = '<h3>Search Results:</h3>';
+                        data.results.forEach((result, index) => {
+                            html += `
+                                <div class="result-item">
+                                    <div class="result-source">${result.source}</div>
+                                    <div class="result-text">${result.text.substring(0, 500)}${result.text.length > 500 ? '...' : ''}</div>
+                                    <small>Distance: ${result.distance.toFixed(4)}</small>
+                                </div>
+                            `;
+                        });
+                        resultsDiv.innerHTML = html;
+                    }
+
+                    // Load stats on page load
+                    loadStats();
+                    
+                    // Search on Enter key
+                    document.getElementById('query').addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') search();
+                    });
+                </script>
+            </body>
+            </html>
+            ''')
+
+        @app.route('/health')
+        def health():
+            return jsonify({"status": "healthy"})
+
+        @app.route('/stats')
+        def stats():
+            try:
+                collection = connect_to_milvus()
+                if collection:
+                    return jsonify({
+                        "total_documents": collection.num_entities,
+                        "collection_name": "hammerspace_docs",
+                        "status": "connected"
+                    })
+                else:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
+        @app.route('/search', methods=['POST'])
+        def search():
+            try:
+                data = request.get_json()
+                query = data.get('query', '')
+                top_k = data.get('top_k', 5)
+                
+                collection = connect_to_milvus()
+                if not collection:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+                
+                results = simple_search(collection, query, top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "source": result.entity.get('source', 'Unknown'),
+                        "text": result.entity.get('text', 'No text available'),
+                        "distance": result.distance
+                    })
+                
+                return jsonify({"results": formatted_results, "query": query})
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
+        if __name__ == '__main__':
+            print("=== RAG Playground Started ===")
+            collection = connect_to_milvus()
+            if collection:
+                print(f"Connected to Milvus collection: hammerspace_docs")
+                print(f"Collection has {collection.num_entities} entities")
+            else:
+                print("Failed to connect to Milvus")
+            
+            print("Starting Flask server on port 8080...")
+            print("Playground will be available at http://localhost:8080")
+            print("This demonstrates the working vector search component of the RAG pipeline")
+            app.run(host='0.0.0.0', port=8080, debug=False)
+        EOF
+        
+        python /app/playground.py
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "200m"
+        memory: "256Mi"

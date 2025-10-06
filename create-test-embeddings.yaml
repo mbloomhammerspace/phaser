@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: create-test-embeddings
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install pymilvus numpy && python3 -c \"import numpy as np; from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType; connections.connect('default', host='milvus', port='19530'); print('Connected to Milvus'); collection_name = 'test_documents'; collection = Collection(collection_name); print(f'Using collection: {collection_name}'); test_docs = ['This is a test document about AI.', 'The NVIDIA RAG Blueprint provides advanced capabilities.', 'Vector databases enable semantic search.', 'GPU acceleration improves performance.', 'Document processing is key to RAG systems.']; embeddings = [np.random.rand(1536).tolist() for _ in test_docs]; data = [embeddings, test_docs, [f'test_doc_{i+1}.pdf' for i in range(len(test_docs))]]; collection.insert(data); collection.flush(); print(f'Inserted {len(test_docs)} documents'); print(f'Collection now contains {collection.num_entities} entities'); print('✓ Test embeddings created!')\""]

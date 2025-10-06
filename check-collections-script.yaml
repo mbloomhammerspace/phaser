@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: check-collections-script
+  namespace: default
+data:
+  check_collections.py: |
+    from pymilvus import connections, list_collections, Collection
+    
+    # Connect to Milvus
+    connections.connect('default', host='milvus', port='19530')
+    print('Connected to Milvus')
+    
+    # List all collections
+    collections = list_collections()
+    print(f'Found {len(collections)} collections:')
+    for col in collections:
+        print(f'  - {col}')
+    
+    # Check each collection
+    for col_name in collections:
+        try:
+            collection = Collection(col_name)
+            collection.load()
+            num_entities = collection.num_entities
+            print(f'Collection "{col_name}": {num_entities} entities')
+            
+            # Get schema info
+            schema = collection.schema
+            print(f'  Schema fields: {[field.name for field in schema.fields]}')
+            
+        except Exception as e:
+            print(f'Error checking collection {col_name}: {e}')
+    
+    print('✓ Collection check complete')
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-collections-script
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install pymilvus && python3 /app/check_collections.py"]
+    volumeMounts:
+    - name: script-volume
+      mountPath: /app
+  volumes:
+  - name: script-volume
+    configMap:
+      name: check-collections-script

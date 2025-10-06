@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nv-ingest-working
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nv-ingest-working
+  template:
+    metadata:
+      labels:
+        app: nv-ingest-working
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: nv-ingest
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+        imagePullPolicy: Always
+        env:
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+        - name: REDIS_HOST
+          value: "rag-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+          limits:
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: pdf-storage
+          mountPath: /mnt/iscsi/pdf-test
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: pdf-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nv-ingest-api
+  namespace: default
+spec:
+  selector:
+    app: nv-ingest-working
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  type: ClusterIP

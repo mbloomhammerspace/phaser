@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-gpu
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-gpu
+  template:
+    metadata:
+      labels:
+        app: milvus-gpu
+    spec:
+      containers:
+        - name: milvus-gpu
+          image: milvusdb/milvus:v2.3.0
+          command: ["milvus", "run", "standalone"]
+          env:
+            - name: ETCD_ENDPOINTS
+              value: "10.233.58.165:2379"
+            - name: MINIO_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_STORAGE_TYPE
+              value: "minio"
+            - name: MILVUS_STORAGE_CONFIG_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_STORAGE_CONFIG_BUCKET
+              value: "milvus-bucket"
+            - name: MILVUS_COMMON_STORAGE_TYPE
+              value: "minio"
+            - name: MILVUS_COMMON_STORAGE_CONFIG_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_COMMON_STORAGE_CONFIG_BUCKET
+              value: "milvus-bucket"
+            - name: MILVUS_ETCD_ENDPOINTS
+              value: "10.233.58.165:2379"
+            - name: MILVUS_ETCD_USE_EMBEDDED
+              value: "false"
+          ports:
+            - containerPort: 19530
+              name: milvus
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+              nvidia.com/gpu: "1"
+      nodeSelector:
+        kubernetes.io/hostname: gpu-worker-node
+      tolerations:
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-gpu
+  namespace: default
+spec:
+  selector:
+    app: milvus-gpu
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: milvus
+      name: milvus

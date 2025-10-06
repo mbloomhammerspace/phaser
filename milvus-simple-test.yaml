@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-test
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-test
+  template:
+    metadata:
+      labels:
+        app: milvus-test
+    spec:
+      containers:
+        - name: milvus-test
+          image: milvusdb/milvus:v2.3.0
+          command: ["milvus", "run", "standalone"]
+          env:
+            - name: ETCD_ENDPOINTS
+              value: "10.233.58.165:2379"
+            - name: MINIO_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_STORAGE_TYPE
+              value: "minio"
+            - name: MILVUS_STORAGE_CONFIG_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_STORAGE_CONFIG_BUCKET
+              value: "milvus-bucket"
+            - name: MILVUS_COMMON_STORAGE_TYPE
+              value: "minio"
+            - name: MILVUS_COMMON_STORAGE_CONFIG_ADDRESS
+              value: "minio:9000"
+            - name: MILVUS_COMMON_STORAGE_CONFIG_BUCKET
+              value: "milvus-bucket"
+            - name: MILVUS_ETCD_ENDPOINTS
+              value: "10.233.58.165:2379"
+            - name: MILVUS_ETCD_USE_EMBEDDED
+              value: "false"
+          ports:
+            - containerPort: 19530
+              name: milvus
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-test
+  namespace: default
+spec:
+  selector:
+    app: milvus-test
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: milvus
+      name: milvus

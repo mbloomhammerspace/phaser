@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pdf-extraction
+  labels:
+    name: pdf-extraction
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-processor
+  namespace: pdf-extraction
+  labels:
+    app: pdf-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdf-processor
+  template:
+    metadata:
+      labels:
+        app: pdf-processor
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu-worker-node
+      containers:
+      - name: pdf-processor
+        image: python:3.9-slim
+        command: ["/bin/bash"]
+        args: ["-c", "pip install pymilvus pypdf2 sentence-transformers torch && sleep infinity"]
+        env:
+        - name: MILVUS_HOST
+          value: "milvus.default.svc.cluster.local"
+        - name: MILVUS_PORT
+          value: "19530"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "4Gi"
+            cpu: "2"
+          requests:
+            nvidia.com/gpu: 1
+            memory: "2Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: pdf-storage
+          mountPath: /pdfs
+        - name: extraction-scripts
+          mountPath: /scripts
+      volumes:
+      - name: pdf-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      - name: extraction-scripts
+        configMap:
+          name: extraction-scripts
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: extraction-scripts
+  namespace: pdf-extraction
+data:
+  extract_pdfs.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import json
+    from pathlib import Path
+    import PyPDF2
+    from sentence_transformers import SentenceTransformer
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    
+    # Connect to Milvus
+    connections.connect("default", host="milvus.default.svc.cluster.local", port="19530")
+    
+    # Initialize sentence transformer model
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    # Create collection if it doesn't exist
+    collection_name = "pdf_embeddings"
+    if not utility.has_collection(collection_name):
+        fields = [
+            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="filename", dtype=DataType.VARCHAR, max_length=255),
+            FieldSchema(name="page_number", dtype=DataType.INT64),
+            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=384)
+        ]
+        schema = CollectionSchema(fields, "PDF document embeddings")
+        collection = Collection(collection_name, schema)
+        
+        # Create index
+        index_params = {
+            "metric_type": "L2",
+            "index_type": "IVF_FLAT",
+            "params": {"nlist": 1024}
+        }
+        collection.create_index("embedding", index_params)
+    else:
+        collection = Collection(collection_name)
+    
+    def extract_text_from_pdf(pdf_path):
+        """Extract text from PDF file"""
+        text_content = []
+        try:
+            with open(pdf_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page_num, page in enumerate(pdf_reader.pages):
+                    text = page.extract_text()
+                    if text.strip():
+                        text_content.append({
+                            'page_number': page_num + 1,
+                            'text': text.strip()
+                        })
+        except Exception as e:
+            print(f"Error processing {pdf_path}: {e}")
+        return text_content
+    
+    def process_pdfs(pdf_directory):
+        """Process all PDFs in directory"""
+        pdf_dir = Path(pdf_directory)
+        pdf_files = list(pdf_dir.glob("*.pdf"))
+        
+        if not pdf_files:
+            print(f"No PDF files found in {pdf_directory}")
+            return
+        
+        print(f"Found {len(pdf_files)} PDF files to process")
+        
+        for pdf_file in pdf_files:
+            print(f"Processing: {pdf_file.name}")
+            text_content = extract_text_from_pdf(pdf_file)
+            
+            if not text_content:
+                print(f"No text extracted from {pdf_file.name}")
+                continue
+            
+            # Prepare data for insertion
+            data = []
+            for page_data in text_content:
+                # Generate embedding
+                embedding = model.encode(page_data['text']).tolist()
+                
+                data.append({
+                    'filename': pdf_file.name,
+                    'page_number': page_data['page_number'],
+                    'text': page_data['text'],
+                    'embedding': embedding
+                })
+            
+            # Insert into Milvus
+            collection.insert(data)
+            print(f"Inserted {len(data)} pages from {pdf_file.name}")
+        
+        # Flush collection
+        collection.flush()
+        print("All PDFs processed successfully!")
+    
+    if __name__ == "__main__":
+        pdf_dir = "/pdfs/pdf-test"
+        if len(sys.argv) > 1:
+            pdf_dir = sys.argv[1]
+        
+        process_pdfs(pdf_dir)

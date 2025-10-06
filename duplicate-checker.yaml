@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: duplicate-checker
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: checker
+    image: ubuntu:22.04
+    command: ["/bin/bash"]
+    args: ["-c", "apt update && apt install -y md5sum && sleep infinity"]
+    volumeMounts:
+    - name: nfs-storage
+      mountPath: /mnt
+  volumes:
+  - name: nfs-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nv-ingest-ports
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:latest
+    command: ["sh", "-c", "echo 'Testing nv-ingest ports...'; for port in 8000 8001 8080 8081 9000 9001; do echo \"Testing port \$port...\"; wget -qO- http://nv-ingest-simple-api:8080 --bind-address=nv-ingest-simple-api --port=\$port 2>/dev/null | head -c 50 || echo \"  Port \$port failed\"; done; echo 'Port test complete'"]

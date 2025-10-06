@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-service-gpu
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-service-gpu
+  template:
+    metadata:
+      labels:
+        app: llm-service-gpu
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: llm-service
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+        imagePullPolicy: Always
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.llm_server.server:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - name: NVIDIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-secret
+              key: password
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-secret
+              key: password
+        - name: MODEL_NAME
+          value: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: APP_LLM_MODELNAME
+          value: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        - name: APP_LLM_MAXTOKENS
+          value: "4096"
+        - name: APP_LLM_TEMPERATURE
+          value: "0.7"
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            memory: 16Gi
+          limits:
+            nvidia.com/gpu: "1"
+            memory: 32Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-service-gpu
+  namespace: default
+spec:
+  selector:
+    app: llm-service-gpu
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

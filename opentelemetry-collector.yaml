@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: default
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+      zipkin:
+        endpoint: 0.0.0.0:9411
+
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+      memory_limiter:
+        limit_mib: 512
+
+    exporters:
+      zipkin:
+        endpoint: "http://zipkin:9411/api/v2/spans"
+        format: json
+      debug:
+        verbosity: detailed
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp, jaeger, zipkin]
+          processors: [memory_limiter, batch]
+          exporters: [zipkin, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: default
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:latest
+        command: ["/otelcol-contrib", "--config=/etc/otel-collector-config.yaml"]
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 14250
+          name: jaeger-grpc
+        - containerPort: 14268
+          name: jaeger-http
+        - containerPort: 9411
+          name: zipkin
+        env:
+        - name: GOMEMLIMIT
+          value: "512MiB"
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+        volumeMounts:
+        - name: otel-collector-config
+          mountPath: /etc/otel-collector-config.yaml
+          subPath: otel-collector-config.yaml
+      volumes:
+      - name: otel-collector-config
+        configMap:
+          name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+  labels:
+    app: otel-collector
+spec:
+  type: ClusterIP
+  ports:
+  - port: 4317
+    name: otlp-grpc
+  - port: 4318
+    name: otlp-http
+  - port: 14250
+    name: jaeger-grpc
+  - port: 14268
+    name: jaeger-http
+  - port: 9411
+    name: zipkin
+  selector:
+    app: otel-collector

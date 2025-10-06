@@ -1,0 +1,33 @@
+# Enable the embedding NIM service and configure it properly
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2
+    tag: 1.2.2
+  replicaCount: 1
+  resources:
+    limits:
+      memory: 16Gi
+      nvidia.com/gpu: 1
+    requests:
+      memory: 8Gi
+      nvidia.com/gpu: 1
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851  # GPU node
+
+# Update the RAG server to use the local embedding service
+envVars:
+  APP_EMBEDDINGS_MODELNAME: nvidia/llama-3.2-nv-embedqa-1b-v2
+  APP_EMBEDDINGS_SERVERURL: "http://nvidia-nim-llama-32-nv-embedqa-1b-v2:8000"
+  APP_VECTORSTORE_URL: "grpc://milvus:19530"
+
+# Update the ingestor server to use the local embedding service
+ingestor-server:
+  envVars:
+    APP_EMBEDDINGS_MODELNAME: nvidia/llama-3.2-nv-embedqa-1b-v2
+    APP_EMBEDDINGS_SERVERURL: "http://nvidia-nim-llama-32-nv-embedqa-1b-v2:8000"
+    APP_VECTORSTORE_URL: "grpc://milvus:19530"

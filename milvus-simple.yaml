@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-simple
+  namespace: default
+  labels:
+    app: milvus-simple
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-simple
+  template:
+    metadata:
+      labels:
+        app: milvus-simple
+    spec:
+      containers:
+      - name: milvus-simple
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_ENDPOINTS
+          value: "127.0.0.1:2379"
+        - name: MILVUS_ETCD_USE_EMBEDDED
+          value: "true"
+        - name: MILVUS_STORAGE_TYPE
+          value: "local"
+        - name: MILVUS_STORAGE_PATH
+          value: "/var/lib/milvus"
+        ports:
+        - containerPort: 19530
+          name: milvus
+        - containerPort: 9091
+          name: grpc
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+      volumes:
+      - name: milvus-data
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      nodeSelector:
+        kubernetes.io/hostname: worker-node-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-simple
+  namespace: default
+  labels:
+    app: milvus-simple
+spec:
+  selector:
+    app: milvus-simple
+  ports:
+  - protocol: TCP
+    port: 19530
+    targetPort: milvus
+    name: milvus
+  - protocol: TCP
+    port: 9091
+    targetPort: grpc
+    name: grpc

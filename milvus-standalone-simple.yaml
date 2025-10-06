@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  labels:
+    app: milvus-standalone
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-standalone
+  template:
+    metadata:
+      labels:
+        app: milvus-standalone
+    spec:
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_ENDPOINTS
+          value: "10.244.3.14:2379"
+        - name: ETCD_USE_EMBEDDED
+          value: "false"
+        - name: ETCD_USE_SSL
+          value: "false"
+        ports:
+        - containerPort: 19530
+          name: milvus
+        - containerPort: 9091
+          name: http
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+            nvidia.com/gpu: "1"
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      tolerations:
+      - effect: NoSchedule
+        key: node.kubernetes.io/disk-pressure
+        operator: Exists
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone
+  labels:
+    app: milvus-standalone
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    targetPort: 19530
+    protocol: TCP
+    name: milvus
+  - port: 9091
+    targetPort: 9091
+    protocol: TCP
+    name: http
+  selector:
+    app: milvus-standalone
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone-external
+  labels:
+    app: milvus-standalone
+spec:
+  type: NodePort
+  ports:
+  - port: 19530
+    targetPort: 19530
+    nodePort: 30004
+    protocol: TCP
+    name: milvus
+  - port: 9091
+    targetPort: 9091
+    nodePort: 30005
+    protocol: TCP
+    name: http
+  selector:
+    app: milvus-standalone

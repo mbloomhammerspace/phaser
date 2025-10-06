@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: create-test-pdf
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install reportlab && python3 -c \"from reportlab.pdfgen import canvas; from reportlab.lib.pagesizes import letter; c = canvas.Canvas('/tmp/test-document.pdf', pagesize=letter); c.drawString(100, 750, 'Test Document for RAG Blueprint'); c.drawString(100, 730, 'This is a test document to verify PDF ingestion.'); c.drawString(100, 710, 'It contains some sample text that should be embedded.'); c.drawString(100, 690, 'The NVIDIA RAG Blueprint should be able to process this.'); c.drawString(100, 670, 'This document tests the extraction pipeline.'); c.save(); print('Test PDF created successfully')\""]

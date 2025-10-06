@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-simple-proxy
+  labels:
+    app: milvus-simple-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-simple-proxy
+  template:
+    metadata:
+      labels:
+        app: milvus-simple-proxy
+    spec:
+      containers:
+      - name: proxy
+        image: busybox:1.35
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          while true; do
+            echo "TCP Proxy starting..."
+            nc -l -p 19530 -e nc milvus-gpu 19530 &
+            sleep 300
+            pkill nc || true
+          done
+        ports:
+        - containerPort: 19530
+          name: tcp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-simple-proxy
+  labels:
+    app: milvus-simple-proxy
+spec:
+  type: NodePort
+  ports:
+  - port: 19530
+    targetPort: 19530
+    nodePort: 30008
+    protocol: TCP
+  selector:
+    app: milvus-simple-proxy

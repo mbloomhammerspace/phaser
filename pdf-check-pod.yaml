@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pdf-check
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: checker
+    image: busybox
+    command: ["sh", "-c", "ls -lh /mnt/iscsi/ && echo '---' && ls -lh /mnt/iscsi/pdf-test/ 2>&1 || echo 'pdf-test directory not found'"]
+    volumeMounts:
+    - name: storage
+      mountPath: /mnt/iscsi
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

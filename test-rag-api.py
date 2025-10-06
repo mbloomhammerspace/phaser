@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+
+import requests
+import json
+
+RAG_URL = 'http://rag-server:8081'
+
+print('=== Testing RAG Server API Endpoints ===')
+
+# Test health endpoint
+try:
+    health_response = requests.get(f'{RAG_URL}/health', timeout=10)
+    print(f'✓ Health endpoint: {health_response.status_code}')
+    if health_response.status_code == 200:
+        print(f'  Health data: {health_response.json()}')
+    else:
+        print(f'  Health error: {health_response.text}')
+except Exception as e:
+    print(f'✗ Health endpoint error: {e}')
+
+# Test various endpoints
+endpoints_to_test = [
+    '/',
+    '/docs',
+    '/api',
+    '/api/v1',
+    '/ingest',
+    '/upload', 
+    '/documents',
+    '/collections',
+    '/api/v1/ingest',
+    '/api/v1/documents',
+    '/api/v1/collections'
+]
+
+print('\n=== Testing Available Endpoints ===')
+for endpoint in endpoints_to_test:
+    try:
+        response = requests.get(f'{RAG_URL}{endpoint}', timeout=5)
+        print(f'{endpoint}: {response.status_code}')
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                print(f'  JSON Response: {json.dumps(data, indent=2)[:200]}...')
+            except:
+                print(f'  Text Response: {response.text[:200]}...')
+        elif response.status_code == 404:
+            print(f'  Not Found')
+        else:
+            print(f'  Error: {response.text[:100]}...')
+    except Exception as e:
+        print(f'{endpoint}: Connection Error - {e}')
+
+print('\n=== Testing POST Endpoints for Ingestion ===')
+# Test POST endpoints for ingestion
+post_endpoints = [
+    '/ingest',
+    '/upload',
+    '/documents',
+    '/api/v1/ingest',
+    '/api/v1/documents'
+]
+
+test_data = {
+    "text": "This is a test document for ingestion.",
+    "metadata": {"source": "test_file.pdf", "page": 1}
+}
+
+for endpoint in post_endpoints:
+    try:
+        response = requests.post(f'{RAG_URL}{endpoint}', 
+                               json=test_data, 
+                               timeout=10)
+        print(f'POST {endpoint}: {response.status_code}')
+        if response.status_code in [200, 201, 202]:
+            print(f'  Success: {response.json()}')
+        else:
+            print(f'  Error: {response.text[:100]}...')
+    except Exception as e:
+        print(f'POST {endpoint}: Error - {e}')
+
+print('\n=== API Test Complete ===')

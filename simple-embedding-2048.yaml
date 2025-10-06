@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-embedding-2048
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-embedding-2048
+  template:
+    metadata:
+      labels:
+        app: simple-embedding-2048
+    spec:
+      containers:
+      - name: embedding
+        image: python:3.9-slim
+        ports:
+        - containerPort: 8000
+        command: ["python3", "-c"]
+        args:
+          - |
+            import subprocess
+            import sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn", "numpy"])
+            
+            from fastapi import FastAPI
+            from pydantic import BaseModel
+            import uvicorn
+            import numpy as np
+            import hashlib
+            
+            app = FastAPI()
+            
+            class EmbeddingRequest(BaseModel):
+                input: list[str]
+                model: str = "simple-embedding-2048"
+            
+            class EmbeddingResponse(BaseModel):
+                object: str = "list"
+                data: list[dict]
+                model: str
+                usage: dict
+            
+            def generate_embedding(text: str) -> list[float]:
+                """Generate a deterministic 2048-dimensional embedding based on text content"""
+                # Use hash of text to seed random number generator for deterministic embeddings
+                seed = int(hashlib.md5(text.encode()).hexdigest()[:8], 16)
+                np.random.seed(seed)
+                # Generate 2048-dimensional vector
+                embedding = np.random.normal(0, 1, 2048)
+                # Normalize to unit vector
+                embedding = embedding / np.linalg.norm(embedding)
+                return embedding.tolist()
+            
+            @app.post("/v1/embeddings")
+            async def create_embeddings(request: EmbeddingRequest):
+                data = []
+                for i, text in enumerate(request.input):
+                    embedding = generate_embedding(text)
+                    data.append({
+                        "object": "embedding",
+                        "index": i,
+                        "embedding": embedding
+                    })
+                
+                return EmbeddingResponse(
+                    data=data,
+                    model=request.model,
+                    usage={
+                        "prompt_tokens": sum(len(text.split()) for text in request.input),
+                        "total_tokens": sum(len(text.split()) for text in request.input)
+                    }
+                )
+            
+            @app.get("/health")
+            async def health():
+                return {"status": "healthy"}
+            
+            @app.get("/v1/models")
+            async def models():
+                return {
+                    "object": "list",
+                    "data": [{
+                        "id": "simple-embedding-2048",
+                        "object": "model",
+                        "created": 1234567890,
+                        "owned_by": "custom"
+                    }]
+                }
+            
+            if __name__ == "__main__":
+                uvicorn.run(app, host="0.0.0.0", port=8000)
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-embedding-2048
+  namespace: default
+spec:
+  selector:
+    app: simple-embedding-2048
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP

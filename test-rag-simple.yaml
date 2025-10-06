@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-simple
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        
+        echo "=== Testing RAG Pipeline with Ingested PDFs ==="
+        
+        # Test search endpoint
+        echo "Testing search endpoint..."
+        curl -X POST http://rag-server:8081/search \
+          -H "Content-Type: application/json" \
+          -d '{"query": "What is discussed in the documents?", "collection_names": ["hammerspace_docs"]}' \
+          --max-time 60
+        
+        echo ""
+        echo "Testing generate endpoint..."
+        curl -X POST http://rag-server:8081/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages": [{"role": "user", "content": "Summarize the content of the ingested documents."}], "collection_names": ["hammerspace_docs"]}' \
+          --max-time 120
+        
+        echo ""
+        echo "Testing collections endpoint..."
+        curl -X GET http://rag-server:8081/collections --max-time 10
+        
+        echo ""
+        echo "=== RAG Pipeline Test Complete ==="

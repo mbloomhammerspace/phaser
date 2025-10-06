@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-milvus-connections-configmap
+  namespace: default
+data:
+  test-milvus-connections.py: |
+    from pymilvus import connections, utility
+    import sys
+
+    milvus_services = [
+        ('milvus', 19530),
+        ('milvus-external-etcd-clean', 19530),
+        ('milvus-standalone-working', 19530)
+    ]
+
+    for service, port in milvus_services:
+        try:
+            print(f'Testing {service}:{port}...')
+            connections.connect('default', host=service, port=port)
+            collections = utility.list_collections()
+            print(f'  Collections: {collections}')
+            
+            # Check hammerspace_docs if it exists
+            if 'hammerspace_docs' in collections:
+                from pymilvus import Collection
+                col = Collection('hammerspace_docs')
+                col.load()
+                print(f'  hammerspace_docs: {col.num_entities} entities')
+            
+            connections.disconnect('default')
+            print()
+        except Exception as e:
+            print(f'  Error: {e}')
+            try:
+                connections.disconnect('default')
+            except:
+                pass
+            print()
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-milvus-connections
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install pymilvus
+        python3 /scripts/test-milvus-connections.py
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: script-volume
+    configMap:
+      name: test-milvus-connections-configmap
+      defaultMode: 0755

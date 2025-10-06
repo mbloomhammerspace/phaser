@@ -1,0 +1,131 @@
+# Weave Net CNI Installation
+# Simple, reliable networking for Kubernetes
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: weave-net
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: weave-net
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: weave-net
+roleRef:
+  kind: ClusterRole
+  name: weave-net
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: weave-net
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: weave-net
+  namespace: kube-system
+  labels:
+    name: weave-net
+spec:
+  selector:
+    matchLabels:
+      name: weave-net
+  template:
+    metadata:
+      labels:
+        name: weave-net
+    spec:
+      hostNetwork: true
+      hostPID: true
+      serviceAccountName: weave-net
+      tolerations:
+      - operator: Exists
+      containers:
+      - name: weave
+        image: weaveworks/weave-kube:2.8.1
+        command:
+        - /home/weave/weaver
+        - --port=6783
+        - --datapath=datapath
+        - --ipalloc-range=10.32.0.0/12
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: KUBERNETES_SERVICE_HOST
+          value: "10.233.0.1"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "443"
+        volumeMounts:
+        - name: cni-bin-dir
+          mountPath: /host/opt/cni/bin
+        - name: cni-net-dir
+          mountPath: /host/etc/cni/net.d
+        - name: dbus
+          mountPath: /host/var/lib/dbus
+          readOnly: true
+        - name: lib-modules
+          mountPath: /lib/modules
+          readOnly: true
+        - name: xtables-lock
+          mountPath: /run/xtables.lock
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      - name: weave-npc
+        image: weaveworks/weave-npc:2.8.1
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: KUBERNETES_SERVICE_HOST
+          value: "10.233.0.1"
+        - name: KUBERNETES_SERVICE_PORT
+          value: "443"
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      volumes:
+      - name: cni-bin-dir
+        hostPath:
+          path: /opt/cni/bin
+      - name: cni-net-dir
+        hostPath:
+          path: /etc/cni/net.d
+      - name: dbus
+        hostPath:
+          path: /var/lib/dbus
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate

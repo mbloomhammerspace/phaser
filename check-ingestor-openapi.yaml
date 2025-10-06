@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-ingestor-openapi
+spec:
+  restartPolicy: Never
+  containers:
+  - name: check
+    image: busybox:latest
+    command: ["sh", "-c", "wget -qO- http://ingestor-server:8082/openapi.json"]

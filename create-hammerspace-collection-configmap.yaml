@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: create-hammerspace-collection-script
+data:
+  create-hammerspace-collection.py: |
+    #!/usr/bin/env python3
+
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy", "pymilvus"])
+
+    import numpy as np
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+
+    # Connect to Milvus
+    connections.connect('default', host='milvus', port='19530')
+    print('Connected to Milvus')
+
+    collection_name = 'hammerspace_docs'
+
+    # Drop existing collection if it exists
+    if utility.has_collection(collection_name):
+        utility.drop_collection(collection_name)
+        print(f"Dropped existing collection: {collection_name}")
+
+    # Create the proper schema for hammerspace_docs
+    # Based on the RAG server expectations, it should have a 'vector' field, not 'embedding'
+    fields = [
+        FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=2048),  # Using 2048 dimensions
+        FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=256),
+        FieldSchema(name="content_metadata", dtype=DataType.JSON),
+        FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=4096)
+    ]
+
+    schema = CollectionSchema(fields, description="Hammerspace documents for RAG Blueprint")
+    collection = Collection(name=collection_name, schema=schema)
+    print(f'Created collection: {collection_name}')
+
+    # Create index on the vector field
+    index_params = {
+        "metric_type": "L2",
+        "index_type": "IVF_FLAT",
+        "params": {"nlist": 128}
+    }
+    collection.create_index(field_name="vector", index_params=index_params)
+    print("Index created")
+
+    # Insert some test documents
+    test_docs = [
+        'This is a test document about NVIDIA RAG Blueprint.',
+        'The NVIDIA RAG Blueprint provides advanced document processing capabilities.',
+        'Vector databases enable semantic search and retrieval.',
+        'GPU acceleration improves performance for AI workloads.',
+        'Document processing is key to building effective RAG systems.'
+    ]
+
+    # Generate 2048-dimensional embeddings (random for now)
+    embeddings = [np.random.rand(2048).tolist() for _ in test_docs]
+    sources = ["test_doc_1.pdf", "test_doc_2.pdf", "test_doc_3.pdf", "test_doc_4.pdf", "test_doc_5.pdf"]
+    metadata = [{"page": 1, "type": "text"} for _ in test_docs]
+
+    # Prepare data for insertion
+    data = [embeddings, sources, metadata, test_docs]
+
+    # Insert data
+    mr = collection.insert(data)
+    collection.flush()
+    print(f'Inserted {len(test_docs)} documents')
+
+    # Load collection
+    collection.load()
+    print(f'Collection loaded and ready')
+
+    # Check entity count
+    print(f'Collection now contains {collection.num_entities} entities')
+    print('✓ hammerspace_docs collection created successfully!')
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: create-hammerspace-collection
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: create
+    image: python:3.9-slim
+    command: ["python3", "/scripts/create-hammerspace-collection.py"]
+    volumeMounts:
+    - name: create-script
+      mountPath: /scripts
+  volumes:
+  - name: create-script
+    configMap:
+      name: create-hammerspace-collection-script
+      defaultMode: 0755

@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-collections
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests && python3 << 'EOF'
+import requests
+import json
+
+# Test RAG server health
+try:
+    response = requests.get('http://rag-server:8000/health', timeout=10)
+    print(f'RAG Server health: {response.status_code}')
+    if response.status_code == 200:
+        print(f'Health response: {response.json()}')
+except Exception as e:
+    print(f'RAG Server health error: {e}')
+
+# Test RAG server collections endpoint
+try:
+    response = requests.get('http://rag-server:8000/collections', timeout=10)
+    print(f'RAG Server collections: {response.status_code}')
+    if response.status_code == 200:
+        collections = response.json()
+        print(f'Collections response: {collections}')
+    else:
+        print(f'Collections error: {response.text}')
+except Exception as e:
+    print(f'RAG Server collections error: {e}')
+
+print('✓ RAG server test complete')
+EOF"]

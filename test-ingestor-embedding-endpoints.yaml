@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-ingestor-embedding-endpoints
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        python3 -c "
+        import requests
+        import json
+        
+        INGESTOR_URL = 'http://ingestor-server:8082'
+        
+        print('=== Testing Ingestor Server Embedding Endpoints ===')
+        
+        # Test health endpoint
+        try:
+            health_response = requests.get(f'{INGESTOR_URL}/health', timeout=10)
+            print(f'✓ Health endpoint: {health_response.status_code}')
+            if health_response.status_code == 200:
+                print(f'  Health data: {health_response.json()}')
+        except Exception as e:
+            print(f'✗ Health endpoint error: {e}')
+        
+        # Test possible embedding endpoints
+        embedding_endpoints = [
+            '/embeddings',
+            '/embed',
+            '/api/embeddings',
+            '/api/v1/embeddings',
+            '/generate-embeddings',
+            '/embedding',
+            '/v1/embeddings',
+            '/models/embeddings'
+        ]
+        
+        for endpoint in embedding_endpoints:
+            try:
+                # Test GET request
+                response = requests.get(f'{INGESTOR_URL}{endpoint}', timeout=5)
+                print(f'GET {endpoint}: {response.status_code}')
+                if response.status_code == 200:
+                    print(f'  Response: {response.text[:200]}...')
+                elif response.status_code == 405:
+                    print(f'  Method not allowed (but endpoint exists)')
+                
+                # Test POST request with sample text
+                test_data = {
+                    'text': 'This is a test document for embedding generation.',
+                    'inputs': 'This is a test document for embedding generation.',
+                    'input': 'This is a test document for embedding generation.'
+                }
+                
+                response = requests.post(f'{INGESTOR_URL}{endpoint}', json=test_data, timeout=10)
+                print(f'POST {endpoint}: {response.status_code}')
+                if response.status_code in [200, 201, 202]:
+                    print(f'  Success! Response: {response.json()}')
+                elif response.status_code == 415:
+                    print(f'  Unsupported media type')
+                elif response.status_code == 422:
+                    print(f'  Validation error: {response.text[:200]}...')
+                    
+            except Exception as e:
+                print(f'{endpoint}: Error - {e}')
+        
+        # Test OpenAPI/Swagger documentation
+        try:
+            docs_response = requests.get(f'{INGESTOR_URL}/docs', timeout=5)
+            print(f'\\nDocs endpoint: {docs_response.status_code}')
+            if docs_response.status_code == 200:
+                print('  OpenAPI documentation available')
+                
+            openapi_response = requests.get(f'{INGESTOR_URL}/openapi.json', timeout=5)
+            print(f'OpenAPI JSON: {openapi_response.status_code}')
+            if openapi_response.status_code == 200:
+                openapi_data = openapi_response.json()
+                paths = openapi_data.get('paths', {})
+                print(f'  Available paths: {list(paths.keys())}')
+                
+                # Look for embedding-related paths
+                embedding_paths = [path for path in paths.keys() if 'embed' in path.lower()]
+                if embedding_paths:
+                    print(f'  Embedding-related paths: {embedding_paths}')
+                    
+        except Exception as e:
+            print(f'Documentation endpoints error: {e}')
+        
+        print('\\n=== Embedding Endpoint Test Complete ===')
+        "

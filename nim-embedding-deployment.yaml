@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nemoretriever-embedding-ms
+  namespace: default
+  labels:
+    app: nemoretriever-embedding-ms
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nemoretriever-embedding-ms
+  template:
+    metadata:
+      labels:
+        app: nemoretriever-embedding-ms
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: nemoretriever-embedding
+        image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.6.0
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          value: "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"
+        - name: MODEL_NAME
+          value: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nemoretriever-embedding-ms
+  namespace: default
+  labels:
+    app: nemoretriever-embedding-ms
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: nemoretriever-embedding-ms

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: create-collection-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install pymilvus requests && python3 -c \"from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType; MILVUS_HOST='milvus-external-etcd-clean'; MILVUS_PORT='19530'; COLLECTION_NAME='test_collection'; print(f'Connecting to Milvus at {MILVUS_HOST}:{MILVUS_PORT}'); connections.connect('default', host=MILVUS_HOST, port=MILVUS_PORT); print('✓ Milvus connection successful'); from pymilvus import list_collections; collections = list_collections(); print(f'Existing collections: {collections}'); print('✓ Collection test complete')\""]

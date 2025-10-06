@@ -1,0 +1,51 @@
+import os
+import sys
+from pymilvus import connections, Collection, utility
+
+def test_milvus_connection(host, port, service_name):
+    print(f"\n=== Testing {service_name} ({host}:{port}) ===")
+    try:
+        connections.connect("default", host=host, port=str(port))
+        
+        collections = utility.list_collections()
+        print(f"Collections: {collections}")
+        
+        if 'hammerspace_docs' in collections:
+            collection = Collection('hammerspace_docs')
+            collection.load()
+            print(f"hammerspace_docs: {collection.num_entities} entities")
+            
+            # Get sample documents to see what they contain
+            if collection.num_entities > 0:
+                res = collection.query(
+                    expr="pk > 0", 
+                    output_fields=["pk", "source", "text"], 
+                    limit=3
+                )
+                print("Sample documents:")
+                for i, doc in enumerate(res):
+                    print(f"  Doc {i+1}: source='{doc['source']}' text_preview='{doc['text'][:80]}...'")
+        else:
+            print("hammerspace_docs collection not found")
+            
+        connections.disconnect("default")
+        return True
+    except Exception as e:
+        print(f"Error connecting to {service_name}: {e}")
+        return False
+
+def main():
+    print("=== Verifying Final Database State ===")
+    
+    # Test different Milvus services
+    milvus_services = [
+        ("milvus", 19530, "main milvus"),
+        ("milvus-external-etcd-clean", 19530, "external etcd milvus"),
+        ("milvus-standalone-working", 19530, "standalone working milvus")
+    ]
+    
+    for host, port, name in milvus_services:
+        test_milvus_connection(host, port, name)
+
+if __name__ == "__main__":
+    main()

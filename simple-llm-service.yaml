@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-llm-service
+  namespace: default
+  labels:
+    app: simple-llm-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-llm-service
+  template:
+    metadata:
+      labels:
+        app: simple-llm-service
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: llm-service
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0  # Using the working image
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          value: "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        - name: NVIDIA_API_KEY
+          value: "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.llm_server.server:app", "--host", "0.0.0.0", "--port", "8000"]  # Assuming there's an LLM server module
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-llm-service
+  namespace: default
+  labels:
+    app: simple-llm-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: simple-llm-service

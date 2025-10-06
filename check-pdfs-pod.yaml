@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-pdfs-pod
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: check
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Checking mounted volume..."
+        ls -la /data
+        echo "Looking for PDF files..."
+        find /data -name "*.pdf" | head -20
+        echo "Looking for test-pdfs directory..."
+        find /data -name "*test*" -type d
+        echo "Total PDF count:"
+        find /data -name "*.pdf" | wc -l
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /data
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

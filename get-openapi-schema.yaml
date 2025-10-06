@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: get-openapi-schema
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        python3 -c "
+        import requests
+        import json
+        
+        INGESTOR_URL = 'http://ingestor-server:8082'
+        
+        print('=== Getting Full OpenAPI Schema ===')
+        
+        try:
+            openapi_response = requests.get(f'{INGESTOR_URL}/openapi.json', timeout=10)
+            if openapi_response.status_code == 200:
+                openapi_data = openapi_response.json()
+                
+                # Save full schema to file for inspection
+                with open('/tmp/openapi.json', 'w') as f:
+                    json.dump(openapi_data, f, indent=2)
+                
+                print('OpenAPI schema saved. Key information:')
+                
+                # Get documents endpoint schema
+                if '/documents' in openapi_data.get('paths', {}):
+                    docs_path = openapi_data['paths']['/documents']
+                    if 'post' in docs_path:
+                        post_schema = docs_path['post']
+                        print(f'\\nPOST /documents schema:')
+                        print(f'Summary: {post_schema.get(\"summary\", \"N/A\")}')
+                        print(f'Description: {post_schema.get(\"description\", \"N/A\")}')
+                        
+                        # Get request body schema
+                        request_body = post_schema.get('requestBody', {})
+                        if request_body:
+                            content = request_body.get('content', {})
+                            if 'application/json' in content:
+                                schema = content['application/json'].get('schema', {})
+                                print(f'\\nFull request schema:')
+                                print(json.dumps(schema, indent=2))
+                
+                # Print all paths for reference
+                paths = openapi_data.get('paths', {})
+                print(f'\\nAll available paths:')
+                for path, methods in paths.items():
+                    print(f'  {path}: {list(methods.keys())}')
+                    
+            else:
+                print(f'Failed to get OpenAPI schema: {openapi_response.status_code}')
+                print(f'Error: {openapi_response.text}')
+                
+        except Exception as e:
+            print(f'Exception: {e}')
+        
+        print('\\n=== OpenAPI Schema Retrieval Complete ===')
+        "

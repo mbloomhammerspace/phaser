@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-nv-ingest-script
+data:
+  test_api.py: |
+    import requests
+    import json
+    
+    print('=== Testing NVIDIA nv-ingest API ===')
+    
+    # Test health endpoint
+    try:
+        health_response = requests.get('http://nv-ingest-simple-api:8080/health', timeout=10)
+        print(f'Health endpoint: {health_response.status_code}')
+        if health_response.status_code == 200:
+            print(f'Health data: {health_response.json()}')
+        else:
+            print(f'Error: {health_response.text}')
+    except Exception as e:
+        print(f'Health endpoint error: {e}')
+    
+    # Test if there are any ingestion endpoints
+    endpoints_to_try = ['/ingest', '/upload', '/documents', '/docs', '/add', '/index', '/api/v1/ingest', '/api/ingest']
+    for endpoint in endpoints_to_try:
+        try:
+            response = requests.get(f'http://nv-ingest-simple-api:8080{endpoint}', timeout=5)
+            print(f'{endpoint}: {response.status_code}')
+            if response.status_code == 200:
+                print(f'  Response: {response.text[:200]}...')
+        except Exception as e:
+            print(f'{endpoint}: Error - {e}')
+    
+    print('=== API Test Complete ===')
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nv-ingest-simple
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["python3", "/scripts/test_api.py"]
+    volumeMounts:
+    - name: test-script-volume
+      mountPath: /scripts
+  volumes:
+  - name: test-script-volume
+    configMap:
+      name: test-nv-ingest-script
+      defaultMode: 0755

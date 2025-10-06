@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-server-fixed
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rag-server-fixed
+  template:
+    metadata:
+      labels:
+        app: rag-server-fixed
+    spec:
+      containers:
+      - name: rag-server
+        image: nvcr.io/nvidia/blueprint/rag-server:2.2.0
+        imagePullPolicy: Always
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.rag_server.server:app", "--host", "0.0.0.0", "--port", "8081", "--workers", "4"]
+        env:
+        - name: APP_EMBEDDINGS_MODELNAME
+          value: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        - name: APP_EMBEDDINGS_SERVERURL
+          value: "http://ingestor-server:8082"
+        - name: APP_LLM_MODELNAME
+          value: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        - name: APP_LLM_SERVERURL
+          value: ""
+        - name: APP_QUERYREWRITER_MODELNAME
+          value: "meta/llama-3.1-8b-instruct"
+        - name: APP_QUERYREWRITER_SERVERURL
+          value: ""
+        - name: APP_RANKING_MODELNAME
+          value: "nvidia/llama-3.2-nv-rerankqa-1b-v2"
+        - name: APP_RANKING_SERVERURL
+          value: ""
+        - name: APP_RETRIEVER_SCORETHRESHOLD
+          value: "0.25"
+        - name: APP_RETRIEVER_TOPK
+          value: "10"
+        - name: APP_TEXTSPLITTER_CHUNKOVERLAP
+          value: "200"
+        - name: APP_TEXTSPLITTER_CHUNKSIZE
+          value: "2000"
+        - name: APP_TRACING_ENABLED
+          value: "False"
+        - name: APP_VECTORSTORE_CONSISTENCYLEVEL
+          value: "Strong"
+        - name: APP_VECTORSTORE_NAME
+          value: "milvus"
+        - name: APP_VECTORSTORE_SEARCHTYPE
+          value: "dense"
+        - name: APP_VECTORSTORE_URL
+          value: "grpc://milvus:19530"
+        - name: APP_VLM_MODELNAME
+          value: "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
+        - name: APP_VLM_SERVERURL
+          value: ""
+        ports:
+        - containerPort: 8081
+        resources:
+          requests:
+            memory: 4Gi
+          limits:
+            memory: 8Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+      imagePullSecrets:
+      - name: ngc-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-server-fixed
+  namespace: default
+spec:
+  selector:
+    app: rag-server-fixed
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+      name: http
+  type: ClusterIP

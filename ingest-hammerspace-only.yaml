@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-hammerspace-only-configmap
+  namespace: default
+data:
+  ingest-hammerspace-only.py: |
+    import os
+    import sys
+    import fitz
+    import json
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    import numpy as np
+
+    def connect_to_milvus():
+        try:
+            connections.connect('default', host='milvus', port='19530')
+            print("Connected to Milvus")
+            return True
+        except Exception as e:
+            print("Failed to connect to Milvus:", e)
+            return False
+
+    def create_hammerspace_collection():
+        collection_name = 'hammerspace_all'
+        
+        # Drop existing collection if it exists
+        if utility.has_collection(collection_name):
+            print(f"Dropping existing collection: {collection_name}")
+            utility.drop_collection(collection_name)
+        
+        print(f"Creating new collection: {collection_name}")
+        fields = [
+            FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=2048),
+            FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=256),
+            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=4096)
+        ]
+        schema = CollectionSchema(fields, description="HammerSpace documents collection")
+        
+        collection = Collection(name=collection_name, schema=schema)
+        
+        index_params = {
+            "metric_type": "L2",
+            "index_type": "IVF_FLAT",
+            "params": {"nlist": 128}
+        }
+        collection.create_index(field_name="vector", index_params=index_params)
+        print("Created collection and index")
+        
+        return collection
+
+    def extract_text_from_pdf(pdf_path):
+        try:
+            doc = fitz.open(pdf_path)
+            text = ''
+            for page in doc:
+                text += page.get_text()
+            doc.close()
+            return text.strip()
+        except Exception as e:
+            print("Error extracting text from", pdf_path, ":", e)
+            return None
+
+    def generate_simple_embedding(text):
+        return np.random.rand(2048).tolist()
+
+    def ingest_pdf(pdf_path, collection):
+        filename = os.path.basename(pdf_path)
+        print("Processing:", filename)
+        
+        text = extract_text_from_pdf(pdf_path)
+        if not text:
+            return False
+        
+        # Ensure text is properly truncated
+        text = str(text)[:3000]  # More conservative truncation
+        embedding = generate_simple_embedding(text)
+        
+        data = [
+            [embedding],
+            [filename],
+            [text]
+        ]
+        
+        try:
+            collection.insert(data)
+            return True
+        except Exception as e:
+            print(f"Failed to ingest {filename}: {e}")
+            return False
+
+    def main():
+        print("=== Ingesting HammerSpace PDFs ===")
+        
+        if not connect_to_milvus():
+            return
+        
+        collection = create_hammerspace_collection()
+        
+        pdf_dir = "/data/pdf-test"
+        if not os.path.exists(pdf_dir):
+            print("PDF directory not found:", pdf_dir)
+            return
+            
+        pdf_files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
+        print("Found", len(pdf_files), "HammerSpace PDF files")
+        
+        total_processed = 0
+        total_successful = 0
+        
+        for pdf_file in pdf_files:
+            pdf_path = os.path.join(pdf_dir, pdf_file)
+            if ingest_pdf(pdf_path, collection):
+                total_successful += 1
+            total_processed += 1
+        
+        collection.flush()
+        collection.load()
+        
+        print("=== Final Ingestion Summary ===")
+        print("Total processed:", total_processed, "files")
+        print("Total successful:", total_successful, "files")
+        print("Collection entities:", collection.num_entities)
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ingest-hammerspace-only
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: ingest-hammerspace
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing required packages..."
+        pip install pymilvus PyMuPDF numpy
+        echo "Starting ingestion of HammerSpace PDFs..."
+        python3 /scripts/ingest-hammerspace-only.py
+        echo "Ingestion complete!"
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /data
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+  - name: script-volume
+    configMap:
+      name: ingest-hammerspace-only-configmap
+      defaultMode: 0755

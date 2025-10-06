@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-milvus-collections
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: check
+    image: python:3.9-slim
+    command: ["python3", "/scripts/check_milvus_collections.py"]
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: script-volume
+    configMap:
+      name: check-milvus-collections-configmap
+      defaultMode: 0755

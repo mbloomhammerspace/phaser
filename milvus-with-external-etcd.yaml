@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-external-etcd
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-external-etcd
+  template:
+    metadata:
+      labels:
+        app: milvus-external-etcd
+    spec:
+      containers:
+      - name: milvus-external-etcd
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        # Use external etcd
+        - name: ETCD_USE_EMBEDDED
+          value: "false"
+        - name: ETCD_ENDPOINTS
+          value: "etcd.default.svc.cluster.local:2379"
+        # Storage configuration
+        - name: COMMON_STORAGETYPE
+          value: local
+        - name: LOCAL_STORAGE_PATH
+          value: /var/lib/milvus/data
+        # Logging
+        - name: COMMON_LOG_LEVEL
+          value: info
+        - name: COMMON_LOG_FORMAT
+          value: json
+        # HTTP REST API
+        - name: COMMON_RESTFUL_API
+          value: "true"
+        - name: COMMON_RESTFUL_PORT
+          value: "9091"
+        - name: COMMON_GRPC_PORT
+          value: "19530"
+        ports:
+        - containerPort: 19530
+          name: milvus-grpc
+          protocol: TCP
+        - containerPort: 9091
+          name: milvus-http
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - mountPath: /var/lib/milvus
+          name: milvus-data
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - name: milvus-data
+        hostPath:
+          path: /mnt/iscsi/milvus-etcd-data
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-external-etcd
+  namespace: default
+spec:
+  selector:
+    app: milvus-external-etcd
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: 19530
+      name: milvus-grpc
+    - protocol: TCP
+      port: 9091
+      targetPort: 9091
+      name: milvus-http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-external-etcd-external
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: milvus-external-etcd
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: 19530
+      nodePort: 30016
+      name: milvus-grpc
+    - protocol: TCP
+      port: 9091
+      targetPort: 9091
+      nodePort: 30017
+      name: milvus-http

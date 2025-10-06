@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nvidia-embedding-nim
+  namespace: default
+  labels:
+    app: nvidia-embedding-nim
+    app.kubernetes.io/name: nvidia-embedding-nim
+    app.kubernetes.io/instance: nvidia-embedding-nim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nvidia-embedding-nim
+  template:
+    metadata:
+      labels:
+        app: nvidia-embedding-nim
+        app.kubernetes.io/name: nvidia-embedding-nim
+        app.kubernetes.io/instance: nvidia-embedding-nim
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: embedding-nim
+        image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.2.2
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: NGC_API_KEY
+          value: "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"
+        - name: MODEL_NAME
+          value: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 30
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nvidia-embedding-nim
+  namespace: default
+  labels:
+    app: nvidia-embedding-nim
+    app.kubernetes.io/name: nvidia-embedding-nim
+    app.kubernetes.io/instance: nvidia-embedding-nim
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: nvidia-embedding-nim

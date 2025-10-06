@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-service-blueprint
+  namespace: default
+  labels:
+    app: embedding-service-blueprint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedding-service-blueprint
+  template:
+    metadata:
+      labels:
+        app: embedding-service-blueprint
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: embedding
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          value: "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"
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+        - name: MESSAGE_CLIENT_HOST
+          value: "rag-redis-master"
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MESSAGE_CLIENT_TYPE
+          value: "redis"
+        - name: REDIS_HOST
+          value: "rag-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: MINIO_ENDPOINT
+          value: "minio:9000"
+        - name: MINIO_ACCESSKEY
+          value: "minioadmin"
+        - name: MINIO_SECRETKEY
+          value: "minioadmin"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: LOG_LEVEL
+          value: "INFO"
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.embedding_server.server:app", "--host", "0.0.0.0", "--port", "8000"]
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-service-blueprint
+  namespace: default
+  labels:
+    app: embedding-service-blueprint
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: embedding-service-blueprint

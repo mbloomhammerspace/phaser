@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ingest-test-pdfs
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: nv-ingest
+    image: nvcr.io/nvidia/nim/nv-ingest:24.10
+    imagePullPolicy: Always
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Starting PDF ingestion with NVIDIA RAG Blueprint..."
+        echo "Available PDFs: $(ls /mnt/iscsi/pdf-test/pdfs/ | wc -l) files"
+        
+        # Ingest a small subset of PDFs first (first 10 files)
+        echo "Ingesting first 10 PDF files..."
+        ls /mnt/iscsi/pdf-test/pdfs/ | head -10 | while read pdf; do
+          echo "Processing: $pdf"
+          nv-ingest-cli \
+            --milvus-host milvus \
+            --milvus-port 19530 \
+            --input-path "/mnt/iscsi/pdf-test/pdfs/$pdf" \
+            --collection-name hammerspace_docs \
+            --chunk-size 512 \
+            --chunk-overlap 50
+          if [ $? -eq 0 ]; then
+            echo "✓ Successfully ingested: $pdf"
+          else
+            echo "✗ Failed to ingest: $pdf"
+          fi
+        done
+        
+        echo "Ingestion complete. Checking collection status..."
+        python3 -c "
+        from pymilvus import connections, Collection, utility
+        connections.connect('default', host='milvus', port='19530')
+        if utility.has_collection('hammerspace_docs'):
+            collection = Collection('hammerspace_docs')
+            collection.load()
+            print(f'Total documents in hammerspace_docs: {collection.num_entities}')
+        else:
+            print('hammerspace_docs collection not found')
+        "
+    env:
+    - name: NIM_MODEL_PROFILE
+      value: "6097695b532c9abe549de9918de6b4702eda625f27b508acd7b7dcc04f38ebe1"
+    - name: MESSAGE_CLIENT_HOST
+      value: "rag-redis-master"
+    - name: MESSAGE_CLIENT_PORT
+      value: "6379"
+    - name: MILVUS_HOST
+      value: "milvus"
+    - name: MILVUS_PORT
+      value: "19530"
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /mnt/iscsi/pdf-test
+    resources:
+      requests:
+        nvidia.com/gpu: "1"
+      limits:
+        nvidia.com/gpu: "1"
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+  imagePullSecrets:
+  - name: ngc-secret
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

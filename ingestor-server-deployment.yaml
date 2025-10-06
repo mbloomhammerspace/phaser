@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestor-server
+  namespace: default
+  labels:
+    app: ingestor-server
+    app.kubernetes.io/name: ingestor-server
+    app.kubernetes.io/instance: rag-blueprint
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingestor-server
+  template:
+    metadata:
+      labels:
+        app: ingestor-server
+        app.kubernetes.io/name: ingestor-server
+        app.kubernetes.io/instance: rag-blueprint
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: ingestor-server
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+        ports:
+        - containerPort: 8082
+          name: http
+        env:
+        - name: APP_EMBEDDINGS_DIMENSIONS
+          value: "2048"
+        - name: APP_EMBEDDINGS_MODELNAME
+          value: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        - name: APP_EMBEDDINGS_SERVERURL
+          value: ""  # This should be empty to use external API
+        - name: APP_NVINGEST_EXTRACTCHARTS
+          value: "False"
+        - name: APP_NVINGEST_EXTRACTIMAGES
+          value: "False"
+        - name: APP_NVINGEST_EXTRACTTABLES
+          value: "True"
+        - name: APP_NVINGEST_EXTRACTTEXT
+          value: "True"
+        - name: APP_VECTORSTORE_ENABLEGPUINDEX
+          value: "True"
+        - name: APP_VECTORSTORE_ENABLEGPUSEARCH
+          value: "True"
+        - name: APP_VECTORSTORE_NAME
+          value: "milvus"
+        - name: APP_VECTORSTORE_URL
+          value: "grpc://milvus:19530"
+        - name: COLLECTION_NAME
+          value: "hammerspace_docs"
+        - name: ENABLE_CITATIONS
+          value: "True"
+        - name: LOGLEVEL
+          value: "INFO"
+        - name: MINIO_ACCESSKEY
+          value: "minioadmin"
+        - name: MINIO_ENDPOINT
+          value: "minio:9000"
+        - name: MINIO_SECRETKEY
+          value: "minioadmin"
+        - name: NGC_API_KEY
+          value: "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        - name: NVIDIA_API_KEY
+          value: "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.ingestor_server.server:app", "--host", "0.0.0.0", "--port", "8082"]
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"

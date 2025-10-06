@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pvc-pod
+spec:
+  containers:
+  - name: test-container
+    image: busybox
+    command: ["sh", "-c", "echo 'PVC test' > /mnt/test.txt && cat /mnt/test.txt && sleep 3600"]
+    volumeMounts:
+    - name: blueprint-storage
+      mountPath: /mnt
+  volumes:
+  - name: blueprint-storage
+    persistentVolumeClaim:
+      claimName: blueprint-local-storage
+  restartPolicy: Never

@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-server-llm
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        python3 -c "
+        import requests
+        import json
+        
+        RAG_URL = 'http://rag-server:8081'
+        
+        print('=== Testing RAG Server LLM Endpoints ===')
+        
+        # Test health endpoint
+        try:
+            health_response = requests.get(f'{RAG_URL}/health', timeout=10)
+            print(f'✓ Health endpoint: {health_response.status_code}')
+            if health_response.status_code == 200:
+                print(f'  Health data: {health_response.json()}')
+        except Exception as e:
+            print(f'✗ Health endpoint error: {e}')
+        
+        # Test generate endpoint
+        print('\\n=== Testing Generate Endpoint ===')
+        generate_payload = {
+            'messages': [
+                {'role': 'user', 'content': 'What is artificial intelligence?'}
+            ],
+            'collection_names': ['hammerspace_docs']
+        }
+        
+        try:
+            generate_response = requests.post(f'{RAG_URL}/generate', json=generate_payload, timeout=60)
+            print(f'Generate response: {generate_response.status_code}')
+            if generate_response.status_code == 200:
+                print(f'✓ Generate success!')
+                response_data = generate_response.json()
+                print(f'  Response: {response_data}')
+            else:
+                print(f'✗ Generate error: {generate_response.text[:300]}...')
+        except Exception as e:
+            print(f'✗ Generate exception: {e}')
+        
+        # Test search endpoint first
+        print('\\n=== Testing Search Endpoint ===')
+        search_payload = {
+            'query': 'What is artificial intelligence?',
+            'collection_names': ['hammerspace_docs']
+        }
+        
+        try:
+            search_response = requests.post(f'{RAG_URL}/search', json=search_payload, timeout=30)
+            print(f'Search response: {search_response.status_code}')
+            if search_response.status_code == 200:
+                print(f'✓ Search success!')
+                search_data = search_response.json()
+                print(f'  Search results: {search_data}')
+            else:
+                print(f'✗ Search error: {search_response.text[:300]}...')
+        except Exception as e:
+            print(f'✗ Search exception: {e}')
+        
+        # Test collections endpoint
+        print('\\n=== Testing Collections Endpoint ===')
+        try:
+            collections_response = requests.get(f'{RAG_URL}/collections', timeout=10)
+            print(f'Collections response: {collections_response.status_code}')
+            if collections_response.status_code == 200:
+                print(f'✓ Collections success!')
+                collections_data = collections_response.json()
+                print(f'  Collections: {collections_data}')
+            else:
+                print(f'✗ Collections error: {collections_response.text[:300]}...')
+        except Exception as e:
+            print(f'✗ Collections exception: {e}')
+        
+        # Test available endpoints
+        print('\\n=== Testing Available Endpoints ===')
+        endpoints_to_try = ['/', '/docs', '/api', '/api/v1', '/openapi.json']
+        for endpoint in endpoints_to_try:
+            try:
+                response = requests.get(f'{RAG_URL}{endpoint}', timeout=5)
+                print(f'{endpoint}: {response.status_code}')
+                if response.status_code == 200:
+                    if 'application/json' in response.headers.get('Content-Type', ''):
+                        print(f'  JSON Response: {response.json()}')
+                    else:
+                        print(f'  Text Response: {response.text[:200]}...')
+            except Exception as e:
+                print(f'{endpoint}: Error - {e}')
+        
+        print('\\n=== RAG Server LLM Test Complete ===')
+        "

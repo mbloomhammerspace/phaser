@@ -1,0 +1,131 @@
+appName: rag-server
+namespace: "default"
+
+# Use existing NGC secret
+imagePullSecret:
+  name: "ngc-secret"
+  create: false
+
+ngcApiSecret:
+  name: "ngc-api"
+  password: "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"
+  create: true
+
+# RAG server config
+image:
+  repository: nvcr.io/nvidia/blueprint/rag-server
+  tag: "2.2.0"
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  limits:
+    memory: "16Gi"
+  requests:
+    memory: "8Gi"
+
+envVars:
+  # Point to our existing Milvus instance
+  APP_VECTORSTORE_URL: "http://milvus-gpu:19530"
+  APP_VECTORSTORE_NAME: "milvus"
+  COLLECTION_NAME: "hammerspace_docs"
+  
+  # Point to our existing Minio instance
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_ACCESSKEY: "minioadmin"
+  MINIO_SECRETKEY: "minioadmin"
+  
+  # Use NVIDIA hosted APIs for models (requires NGC API key)
+  APP_LLM_MODELNAME: "nvidia/llama-3.3-nemotron-super-49b-v1"
+  APP_LLM_SERVERURL: ""
+  
+  APP_EMBEDDINGS_SERVERURL: ""
+  APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+  
+  APP_RANKING_SERVERURL: ""
+  APP_RANKING_MODELNAME: "nvidia/llama-3.2-nv-rerankqa-1b-v2"
+  ENABLE_RERANKER: "True"
+  
+  ENABLE_CITATIONS: "True"
+  LOGLEVEL: "INFO"
+
+nodeSelector:
+  kubernetes.io/hostname: gpu-worker-node
+
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Ingestor server subchart configuration
+ingestor-server:
+  enabled: true
+  
+  imagePullSecret:
+    name: "ngc-secret"
+    create: false
+  
+  image:
+    repository: nvcr.io/nvidia/blueprint/ingestor-server
+    tag: "2.2.0"
+    pullPolicy: Always
+  
+  resources:
+    limits:
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+    requests:
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+  
+  envVars:
+    # Point to our existing Milvus
+    APP_VECTORSTORE_URL: "http://milvus-gpu:19530"
+    APP_VECTORSTORE_NAME: "milvus"
+    COLLECTION_NAME: "hammerspace_docs"
+    
+    # Point to our existing Minio
+    MINIO_ENDPOINT: "minio:9000"
+    MINIO_ACCESSKEY: "minioadmin"
+    MINIO_SECRETKEY: "minioadmin"
+    
+    # Use NVIDIA hosted APIs
+    APP_EMBEDDINGS_SERVERURL: ""
+    APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+    
+    # NV-Ingest configuration
+    APP_NVINGEST_EXTRACTTEXT: "True"
+    APP_NVINGEST_EXTRACTTABLES: "True"
+    APP_NVINGEST_EXTRACTIMAGES: "False"
+    APP_NVINGEST_EXTRACTCHARTS: "False"
+    
+    ENABLE_CITATIONS: "True"
+    LOGLEVEL: "INFO"
+  
+  nodeSelector:
+    kubernetes.io/hostname: gpu-worker-node
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+  
+  # Mount the PDF storage
+  volumeMounts:
+    - name: pdf-storage
+      mountPath: /pdfs
+  
+  volumes:
+    - name: pdf-storage
+      persistentVolumeClaim:
+        claimName: blueprint-storage
+
+# Frontend (optional - can disable if not needed)
+frontend:
+  enabled: false
+
+# Disable minio subchart - we're using our existing instance
+minio:
+  enabled: false
+

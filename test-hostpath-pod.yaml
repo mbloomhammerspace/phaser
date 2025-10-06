@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-hostpath-pod
+spec:
+  containers:
+  - name: test-container
+    image: busybox
+    command: ["sh", "-c", "echo 'Blueprint storage test' > /mnt/test.txt && ls -la /mnt/ && cat /mnt/test.txt && echo 'Storage test completed successfully' && sleep 3600"]
+    volumeMounts:
+    - name: blueprint-storage
+      mountPath: /mnt
+  volumes:
+  - name: blueprint-storage
+    persistentVolumeClaim:
+      claimName: blueprint-hostpath-storage
+  restartPolicy: Never

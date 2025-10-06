@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-search-final
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Testing RAG search after schema fix..."
+        
+        echo "Testing search with hammerspace_docs collection:"
+        wget --post-data '{"query": "What documents are available?", "collection_names": ["hammerspace_docs"]}' \
+             --header='Content-Type: application/json' \
+             -qO- http://rag-server:8081/search || echo "Search failed"
+        
+        echo ""
+        echo "Testing search without collection_names:"
+        wget --post-data '{"query": "What is discussed in the documents?"}' \
+             --header='Content-Type: application/json' \
+             -qO- http://rag-server:8081/search || echo "Search failed"
+        
+        echo ""
+        echo "Testing generate endpoint:"
+        wget --post-data '{"messages": [{"role": "user", "content": "Summarize the available documents."}], "collection_names": ["hammerspace_docs"]}' \
+             --header='Content-Type: application/json' \
+             -qO- http://rag-server:8081/generate || echo "Generate failed"
+    resources:
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+      requests:
+        cpu: "50m"
+        memory: "64Mi"

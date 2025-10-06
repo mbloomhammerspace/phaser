@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nfs-pvc-new
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: worker-node-1
+  containers:
+  - name: test-container
+    image: busybox
+    command: ["sh", "-c", "echo 'NFS PVC test' > /mnt/test.txt && ls -la /mnt/ && cat /mnt/test.txt && df -h /mnt && echo 'NFS PVC test completed successfully' && sleep 3600"]
+    volumeMounts:
+    - name: blueprint-storage
+      mountPath: /mnt
+  volumes:
+  - name: blueprint-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

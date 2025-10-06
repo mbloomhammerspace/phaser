@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-nim-v2
+  namespace: default
+  labels:
+    app: embedding-nim-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedding-nim-v2
+  template:
+    metadata:
+      labels:
+        app: embedding-nim-v2
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: embedding-nim
+        image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.2.2
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          value: "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        - name: MODEL_NAME
+          value: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-nim-v2
+  namespace: default
+  labels:
+    app: embedding-nim-v2
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: embedding-nim-v2

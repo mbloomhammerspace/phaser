@@ -1,0 +1,149 @@
+appName: ingestor-server
+
+replicaCount: 1
+
+imagePullSecret:
+  create: false
+  name: "ngc-secret"
+
+image:
+  repository: nvcr.io/nvidia/blueprint/ingestor-server
+  tag: "2.2.0"
+  pullPolicy: Always
+
+server:
+  workers: 2
+
+resources:
+  limits:
+    memory: "16Gi"
+    nvidia.com/gpu: "1"
+  requests:
+    memory: "8Gi"
+    nvidia.com/gpu: "1"
+
+envVars:
+  EXAMPLE_PATH: 'src/nvidia_rag/ingestor_server'
+
+  # === Vector Store Configurations - point to our Milvus ===
+  APP_VECTORSTORE_URL: "http://milvus-gpu:19530"
+  APP_VECTORSTORE_NAME: "milvus"
+  APP_VECTORSTORE_SEARCHTYPE: "dense"
+  APP_VECTORSTORE_ENABLEGPUINDEX: "True"
+  APP_VECTORSTORE_ENABLEGPUSEARCH: "True"
+  COLLECTION_NAME: "hammerspace_docs"
+
+  # === MinIO Configurations - point to our Minio ===
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_ACCESSKEY: "minioadmin"
+  MINIO_SECRETKEY: "minioadmin"
+
+  # === Embeddings Configurations - use NVIDIA hosted API ===
+  APP_EMBEDDINGS_SERVERURL: ""
+  APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+  APP_EMBEDDINGS_DIMENSIONS: "2048"
+
+  # === NV-Ingest Configurations ===
+  APP_NVINGEST_MESSAGECLIENTHOSTNAME: "ingestor-server-redis-master"
+  APP_NVINGEST_MESSAGECLIENTPORT: "6379"
+
+  # === NV-Ingest extraction configurations ===
+  APP_NVINGEST_PDFEXTRACTMETHOD: "None"
+  APP_NVINGEST_EXTRACTTEXT: "True"
+  APP_NVINGEST_EXTRACTINFOGRAPHICS: "False"
+  APP_NVINGEST_EXTRACTTABLES: "True"
+  APP_NVINGEST_EXTRACTCHARTS: "False"
+  APP_NVINGEST_EXTRACTIMAGES: "False"
+  APP_NVINGEST_TEXTDEPTH: "page"
+
+  # === General ===
+  SUMMARY_LLM: "nvidia/llama-3.3-nemotron-super-49b-v1"
+  SUMMARY_LLM_SERVERURL: ""
+  SUMMARY_LLM_MAX_CHUNK_LENGTH: "50000"
+  SUMMARY_CHUNK_OVERLAP: "200"
+
+  ENABLE_CITATIONS: "True"
+  LOGLEVEL: "INFO"
+  
+  # NGC API Key
+  NGC_API_KEY: "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"
+  NVIDIA_API_KEY: "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"
+
+  # === NV-Ingest splitting configurations ===
+  APP_NVINGEST_CHUNKSIZE: "512"
+  APP_NVINGEST_CHUNKOVERLAP: "150"
+  APP_NVINGEST_ENABLEPDFSPLITTER: "True"
+
+  # === Redis configurations ===
+  REDIS_HOST: "ingestor-server-redis-master"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+
+  # === Bulk upload to MinIO ===
+  ENABLE_MINIO_BULK_UPLOAD: "True"
+  TEMP_DIR: "/tmp-data"
+
+  # === NV-Ingest Batch Mode Configurations ===
+  NV_INGEST_FILES_PER_BATCH: "16"
+  NV_INGEST_CONCURRENT_BATCHES: "4"
+
+nodeSelector:
+  kubernetes.io/hostname: gpu-worker-node
+
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Enable Redis for task queue
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: false
+    resources:
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+
+# Enable nv-ingest subchart
+nv-ingest:
+  enabled: true
+  
+  imagePullSecrets:
+    - name: "ngc-secret"
+  
+  image:
+    repository: nvcr.io/nvidia/nemo-microservices/nv-ingest
+    tag: "25.6.2"
+    pullPolicy: Always
+  
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "16Gi"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "8Gi"
+  
+  env:
+    NVIDIA_API_KEY: "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"
+    NGC_API_KEY: "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"
+    MESSAGE_CLIENT_HOST: "ingestor-server-redis-master"
+    MESSAGE_CLIENT_PORT: "6379"
+    MESSAGE_CLIENT_TYPE: "redis"
+    CUDA_VISIBLE_DEVICES: "0"
+  
+  nodeSelector:
+    kubernetes.io/hostname: gpu-worker-node
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+

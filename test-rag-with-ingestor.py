@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import subprocess
+import sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+
+import requests
+import json
+
+RAG_URL = 'http://rag-server:8081'
+
+print('=== Testing RAG Server with Current Configuration ===')
+
+# Test health endpoint
+try:
+    health_response = requests.get(f'{RAG_URL}/health', timeout=10)
+    print(f'Health endpoint: {health_response.status_code}')
+    if health_response.status_code == 200:
+        print(f'Health data: {health_response.json()}')
+    else:
+        print(f'Error: {health_response.text}')
+except Exception as e:
+    print(f'Health endpoint error: {e}')
+
+# Test search endpoint with hammerspace_docs
+search_payload = {
+    "query": "What is AI?",
+    "collection_names": ["hammerspace_docs"]
+}
+
+try:
+    print(f'\nTesting search with hammerspace_docs...')
+    search_response = requests.post(f'{RAG_URL}/search', json=search_payload, timeout=30)
+    print(f'Search response: {search_response.status_code}')
+    if search_response.status_code == 200:
+        print(f'Search results: {search_response.json()}')
+    else:
+        print(f'Error: {search_response.text}')
+except Exception as e:
+    print(f'Search error: {e}')
+
+# Test generate endpoint
+generate_payload = {
+    "messages": [
+        {"role": "user", "content": "What is the NVIDIA RAG Blueprint?"}
+    ],
+    "collection_names": ["hammerspace_docs"]
+}
+
+try:
+    print(f'\nTesting generate with hammerspace_docs...')
+    generate_response = requests.post(f'{RAG_URL}/generate', json=generate_payload, timeout=60)
+    print(f'Generate response: {generate_response.status_code}')
+    if generate_response.status_code == 200:
+        print(f'Generate results: {generate_response.json()}')
+    else:
+        print(f'Error: {generate_response.text}')
+except Exception as e:
+    print(f'Generate error: {e}')
+
+print('\n=== RAG Server Test Complete ===')

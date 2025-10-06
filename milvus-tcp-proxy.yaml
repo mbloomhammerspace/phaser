@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-tcp-proxy
+  labels:
+    app: milvus-tcp-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-tcp-proxy
+  template:
+    metadata:
+      labels:
+        app: milvus-tcp-proxy
+    spec:
+      containers:
+      - name: tcp-proxy
+        image: nginx:alpine
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          cat > /etc/nginx/nginx.conf << 'EOF'
+          events {
+            worker_connections 1024;
+          }
+          stream {
+            upstream milvus_backend {
+              server milvus-gpu:19530;
+            }
+            server {
+              listen 19530;
+              proxy_pass milvus_backend;
+              proxy_timeout 1s;
+              proxy_responses 1;
+            }
+          }
+          EOF
+          nginx -g "daemon off;"
+        ports:
+        - containerPort: 19530
+          name: tcp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-tcp-proxy
+  labels:
+    app: milvus-tcp-proxy
+spec:
+  type: NodePort
+  ports:
+  - port: 19530
+    targetPort: 19530
+    nodePort: 30007
+    protocol: TCP
+  selector:
+    app: milvus-tcp-proxy

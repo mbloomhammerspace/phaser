@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-api-ingest
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests && python3 << 'EOF'
+import requests
+import json
+
+# Test RAG server API endpoints
+base_url = 'http://rag-server:8081'
+
+# Test health
+try:
+    response = requests.get(f'{base_url}/health', timeout=10)
+    print(f'RAG Server health: {response.status_code}')
+    if response.status_code == 200:
+        print(f'Health response: {response.json()}')
+except Exception as e:
+    print(f'RAG Server health error: {e}')
+
+# Test collections endpoint
+try:
+    response = requests.get(f'{base_url}/collections', timeout=10)
+    print(f'Collections endpoint: {response.status_code}')
+    if response.status_code == 200:
+        collections = response.json()
+        print(f'Collections: {collections}')
+    else:
+        print(f'Collections error: {response.text}')
+except Exception as e:
+    print(f'Collections error: {e}')
+
+# Test if there's a document upload endpoint
+try:
+    response = requests.get(f'{base_url}/docs', timeout=10)
+    print(f'Docs endpoint: {response.status_code}')
+except Exception as e:
+    print(f'Docs endpoint error: {e}')
+
+# Test if there's an upload endpoint
+try:
+    response = requests.post(f'{base_url}/upload', timeout=10)
+    print(f'Upload endpoint: {response.status_code}')
+except Exception as e:
+    print(f'Upload endpoint error: {e}')
+
+# Test if there's an ingest endpoint
+try:
+    response = requests.post(f'{base_url}/ingest', timeout=10)
+    print(f'Ingest endpoint: {response.status_code}')
+except Exception as e:
+    print(f'Ingest endpoint error: {e}')
+
+print('✓ RAG API test complete')
+EOF"]

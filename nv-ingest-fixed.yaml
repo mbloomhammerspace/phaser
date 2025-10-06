@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nv-ingest-paddle-fixed
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nv-ingest-paddle-fixed
+  template:
+    metadata:
+      labels:
+        app: nv-ingest-paddle-fixed
+    spec:
+      containers:
+      - name: nv-ingest-paddle
+        image: nvcr.io/nvidia/nim/nv-ingest:24.10
+        imagePullPolicy: Always
+        env:
+        - name: NIM_MODEL_PROFILE
+          value: "6097695b532c9abe549de9918de6b4702eda625f27b508acd7b7dcc04f38ebe1"
+        - name: MESSAGE_CLIENT_HOST
+          value: "rag-redis-775f977859-p2gqb.default.svc.cluster.local"
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: NGC_API_KEY
+          value: "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"
+        ports:
+        - containerPort: 8080
+          name: health
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+          requests:
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: model-store
+          mountPath: /opt/nim/.cache
+        - name: dshm
+          mountPath: /dev/shm
+        - name: blueprint-storage
+          mountPath: /data/pdf-test
+          subPath: pdf-test
+      dnsPolicy: ClusterFirst
+      imagePullSecrets:
+      - name: ngc-secret
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: default
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+      - name: model-store
+        emptyDir: {}
+      - name: blueprint-storage
+        persistentVolumeClaim:
+          claimName: blueprint-storage

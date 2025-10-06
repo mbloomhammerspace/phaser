@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-trace-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-client
+    image: python:3.9-slim
+    command: ["/bin/bash"]
+    args: ["-c", "pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-zipkin && python -c \"
+from opentelemetry import trace
+from opentelemetry.exporter.zipkin import ZipkinExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import Resource
+import time
+
+print('Testing OpenTelemetry tracing to Zipkin...')
+
+# Initialize OpenTelemetry
+resource = Resource.create({
+    'service.name': 'simple-trace-test',
+    'service.version': '1.0.0',
+})
+
+trace.set_tracer_provider(TracerProvider(resource=resource))
+tracer = trace.get_tracer(__name__)
+
+# Configure Zipkin exporter
+zipkin_exporter = ZipkinExporter(
+    endpoint='http://simple-otel-collector:4318/v1/traces'
+)
+
+# Add span processor
+span_processor = BatchSpanProcessor(zipkin_exporter)
+trace.get_tracer_provider().add_span_processor(span_processor)
+
+# Test tracing
+with tracer.start_as_current_span('test-operation') as span:
+    span.set_attribute('test.type', 'connectivity')
+    span.set_attribute('test.target', 'zipkin')
+    
+    print('✓ Created test span')
+    
+    # Create nested spans
+    with tracer.start_as_current_span('nested-operation') as nested_span:
+        nested_span.set_attribute('operation.type', 'nested')
+        time.sleep(0.1)
+        print('✓ Created nested span')
+    
+    time.sleep(2)  # Give time for spans to be exported
+
+print('🎉 Tracing test completed! Check Zipkin UI for traces.')
+\""]

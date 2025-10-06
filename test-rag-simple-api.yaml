@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-simple-api
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests && python3 -c \"
+import requests
+base_url = 'http://rag-server:8081'
+try:
+    response = requests.get(f'{base_url}/health', timeout=10)
+    print(f'RAG Server health: {response.status_code}')
+    if response.status_code == 200:
+        print(f'Health: {response.json()}')
+except Exception as e:
+    print(f'Health error: {e}')
+try:
+    response = requests.get(f'{base_url}/collections', timeout=10)
+    print(f'Collections: {response.status_code}')
+    if response.status_code == 200:
+        print(f'Collections data: {response.json()}')
+    else:
+        print(f'Collections error: {response.text}')
+except Exception as e:
+    print(f'Collections error: {e}')
+print('API test complete')
+\""]

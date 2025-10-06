@@ -1,0 +1,13 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-csi
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: 10.0.0.161
+  share: /mnt/iscsi
+  mountPermissions: "0777"
+  mountOptions: "vers=3,proto=tcp"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: Immediate

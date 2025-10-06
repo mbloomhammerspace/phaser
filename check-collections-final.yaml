@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-collections-final
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: checker
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install pymilvus
+        python3 -c "
+        from pymilvus import connections, utility
+        connections.connect('default', host='milvus', port='19530')
+        collections = utility.list_collections()
+        print('=== Milvus Collections ===')
+        for col in collections:
+            if utility.has_collection(col):
+                from pymilvus import Collection
+                c = Collection(col)
+                print(f'{col}: {c.num_entities} documents')
+        print('=== End ===')
+        "

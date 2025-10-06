@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-embedding-endpoints
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Testing embedding endpoints on ingestor-server..."
+        
+        echo "Testing /embeddings endpoint:"
+        wget -qO- --post-data='{"input":"test query"}' --header='Content-Type:application/json' http://ingestor-server:8082/embeddings || echo "Embeddings endpoint not found"
+        
+        echo ""
+        echo "Testing /v1/embeddings endpoint:"
+        wget -qO- --post-data='{"input":"test query"}' --header='Content-Type:application/json' http://ingestor-server:8082/v1/embeddings || echo "V1 embeddings endpoint not found"
+        
+        echo ""
+        echo "Testing /embed endpoint:"
+        wget -qO- --post-data='{"text":"test query"}' --header='Content-Type:application/json' http://ingestor-server:8082/embed || echo "Embed endpoint not found"

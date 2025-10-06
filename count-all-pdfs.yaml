@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: count-all-pdfs
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: counter
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "=== PDF COUNT BEFORE INGEST ==="
+        echo "PDFs in /data/pdf-test:"
+        find /data/pdf-test -name "*.pdf" -type f | wc -l
+        echo "PDFs in /data/pdfs:"
+        find /data/pdfs -name "*.pdf" -type f | wc -l
+        echo "Total PDFs available:"
+        find /data -name "*.pdf" -type f | wc -l
+        echo "=== END COUNT ==="
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /data
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

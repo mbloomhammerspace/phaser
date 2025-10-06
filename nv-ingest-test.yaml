@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nv-ingest-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851  # GPU node
+  containers:
+  - name: nv-ingest
+    image: nvcr.io/nvidia/nim/nv-ingest:24.10
+    command: ["sh", "-c", "echo 'nv-ingest container started' && sleep 3600"]
+    env:
+    - name: NVIDIA_API_KEY
+      value: "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"
+    - name: NGC_API_KEY
+      value: "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"
+    - name: MILVUS_HOST
+      value: "milvus"
+    - name: MILVUS_PORT
+      value: "19530"
+    resources:
+      requests:
+        nvidia.com/gpu: "1"
+      limits:
+        nvidia.com/gpu: "1"
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

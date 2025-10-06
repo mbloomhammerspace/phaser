@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-external-etcd-clean
+  namespace: default
+  labels:
+    app: milvus-external-etcd-clean
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-external-etcd-clean
+  template:
+    metadata:
+      labels:
+        app: milvus-external-etcd-clean
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851  # GPU node
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        ports:
+        - containerPort: 19530
+          name: milvus-grpc
+        - containerPort: 9091
+          name: milvus-http
+        env:
+        # External etcd configuration
+        - name: ETCD_USE_EMBEDDED
+          value: "false"
+        - name: ETCD_ENDPOINTS
+          value: "etcd.default.svc.cluster.local:2379"
+        - name: ETCD_USE_SSL
+          value: "false"
+        - name: ETCD_USERNAME
+          value: ""
+        - name: ETCD_PASSWORD
+          value: ""
+        # Milvus configuration
+        - name: COMMON_STORAGETYPE
+          value: "local"
+        - name: MINIO_ADDRESS
+          value: "localhost"
+        - name: MINIO_ACCESS_KEY
+          value: "minioadmin"
+        - name: MINIO_SECRET_KEY
+          value: "minioadmin"
+        - name: MINIO_USE_SSL
+          value: "false"
+        - name: MINIO_BUCKET_NAME
+          value: "milvus-bucket"
+        # GPU configuration
+        - name: GPU_ENABLED
+          value: "true"
+        - name: GPU_RESOURCE_ENABLED
+          value: "true"
+        # HTTP REST API configuration
+        - name: MILVUS_HTTP_ENABLED
+          value: "true"
+        - name: MILVUS_HTTP_PORT
+          value: "9091"
+        # Logging
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9091
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9091
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: milvus-data
+        hostPath:
+          path: /mnt/iscsi/milvus-data
+          type: DirectoryOrCreate
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-external-etcd-clean
+  namespace: default
+  labels:
+    app: milvus-external-etcd-clean
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    targetPort: 19530
+    protocol: TCP
+    name: milvus-grpc
+  - port: 9091
+    targetPort: 9091
+    protocol: TCP
+    name: milvus-http
+  selector:
+    app: milvus-external-etcd-clean
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-external-etcd-clean-external
+  namespace: default
+  labels:
+    app: milvus-external-etcd-clean
+spec:
+  type: NodePort
+  ports:
+  - port: 19530
+    targetPort: 19530
+    nodePort: 30020
+    protocol: TCP
+    name: milvus-grpc
+  - port: 9091
+    targetPort: 9091
+    nodePort: 30021
+    protocol: TCP
+    name: milvus-http
+  selector:
+    app: milvus-external-etcd-clean

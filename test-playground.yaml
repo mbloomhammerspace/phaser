@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-playground
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        python3 -c "
+        import requests
+        import json
+        
+        print('=== Testing RAG Playground ===')
+        
+        # Test health endpoint
+        try:
+            health_response = requests.get('http://rag-playground-simple:8080/health', timeout=10)
+            print(f'Health endpoint: {health_response.status_code}')
+            if health_response.status_code == 200:
+                health_data = health_response.json()
+                print(f'Health data: {health_data}')
+            else:
+                print(f'Health error: {health_response.text}')
+        except Exception as e:
+            print(f'Health error: {e}')
+        
+        # Test search endpoint
+        try:
+            search_payload = {'query': 'What is artificial intelligence?'}
+            search_response = requests.post(
+                'http://rag-playground-simple:8080/search', 
+                json=search_payload, 
+                timeout=30
+            )
+            print(f'\\nSearch endpoint: {search_response.status_code}')
+            if search_response.status_code == 200:
+                search_data = search_response.json()
+                print(f'Search results: {len(search_data.get(\"results\", []))} documents found')
+                for i, result in enumerate(search_data.get('results', [])[:3]):
+                    print(f'  Result {i+1}:')
+                    print(f'    Score: {result.get(\"score\", 0):.4f}')
+                    print(f'    Text: {result.get(\"text\", \"\")[:100]}...')
+                    print(f'    Source: {result.get(\"source\", \"\")}')
+            else:
+                print(f'Search error: {search_response.text}')
+        except Exception as e:
+            print(f'Search error: {e}')
+        
+        print('\\n=== Playground Test Complete ===')
+        "

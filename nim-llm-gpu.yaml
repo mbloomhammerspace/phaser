@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nim-llm-gpu
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nim-llm-gpu
+  template:
+    metadata:
+      labels:
+        app: nim-llm-gpu
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: nim-llm
+        image: nvcr.io/nim/nvidia/llama-3.1-8b-instruct:1.2.2
+        imagePullPolicy: Always
+        env:
+        - name: NVIDIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-secret
+              key: password
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-secret
+              key: password
+        - name: MODEL_NAME
+          value: "nvidia/llama-3.1-8b-instruct"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        # CUDA compatibility and bypass environment variables
+        - name: CUDA_CACHE_DISABLE
+          value: "1"
+        - name: CUDA_CACHE_MAXSIZE
+          value: "0"
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+        - name: NVIDIA_REQUIRE_CUDA
+          value: "cuda>=12.0"
+        # Bypass CUDA initialization checks
+        - name: CUDA_MODULE_LOADING
+          value: "EAGER"
+        - name: CUDA_LAUNCH_BLOCKING
+          value: "0"
+        - name: CUDA_ERROR_CHECK
+          value: "0"
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            memory: 16Gi
+          limits:
+            nvidia.com/gpu: "1"
+            memory: 32Gi
+        # Add readiness probe with longer timeout for model loading
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 30
+          failureThreshold: 10
+        # Add liveness probe with longer timeout
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 60
+          timeoutSeconds: 30
+          failureThreshold: 5
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-llm-gpu
+  namespace: default
+spec:
+  selector:
+    app: nim-llm-gpu
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

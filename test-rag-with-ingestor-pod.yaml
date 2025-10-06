@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-with-ingestor
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["python3", "/scripts/test-rag-with-ingestor.py"]
+    volumeMounts:
+    - name: test-script-volume
+      mountPath: /scripts
+  volumes:
+  - name: test-script-volume
+    configMap:
+      name: test-rag-with-ingestor-script
+      defaultMode: 0755

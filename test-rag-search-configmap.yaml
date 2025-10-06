@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-rag-search-script
+data:
+  test-rag-search.py: |
+    #!/usr/bin/env python3
+
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+
+    import requests
+    import json
+
+    RAG_URL = 'http://rag-server:8081'
+
+    print('=== Testing RAG Server Search Endpoint ===')
+
+    # Test search endpoint to see if there are any documents
+    search_data = {
+        "query": "test document",
+        "collection_names": ["hammerspace_docs"]
+    }
+
+    try:
+        response = requests.post(f'{RAG_URL}/search', json=search_data, timeout=10)
+        print(f'Search response: {response.status_code}')
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f'Total results: {data.get("total_results", 0)}')
+            print(f'Results count: {len(data.get("results", []))}')
+            
+            if data.get("results"):
+                print('Sample result:')
+                print(json.dumps(data["results"][0], indent=2))
+            else:
+                print('No documents found in hammerspace_docs collection')
+        else:
+            print(f'Error: {response.text}')
+            
+    except Exception as e:
+        print(f'Search error: {e}')
+
+    print('\n=== Testing with test_documents collection ===')
+
+    # Test with the test_documents collection we created earlier
+    search_data_test = {
+        "query": "AI",
+        "collection_names": ["test_documents"]
+    }
+
+    try:
+        response = requests.post(f'{RAG_URL}/search', json=search_data_test, timeout=10)
+        print(f'Search test_documents response: {response.status_code}')
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f'Total results: {data.get("total_results", 0)}')
+            print(f'Results count: {len(data.get("results", []))}')
+            
+            if data.get("results"):
+                print('Sample result:')
+                print(json.dumps(data["results"][0], indent=2))
+            else:
+                print('No documents found in test_documents collection')
+        else:
+            print(f'Error: {response.text}')
+            
+    except Exception as e:
+        print(f'Search test_documents error: {e}')
+
+    print('\n=== Search Test Complete ===')
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-search
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["python3", "/scripts/test-rag-search.py"]
+    volumeMounts:
+    - name: test-script
+      mountPath: /scripts
+  volumes:
+  - name: test-script
+    configMap:
+      name: test-rag-search-script
+      defaultMode: 0755

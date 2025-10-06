@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import subprocess
+import sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+
+import requests
+import json
+
+INGESTOR_URL = 'http://ingestor-server:8082'
+
+print('=== Testing Ingestor Server for Embedding Functionality ===')
+
+# Test health endpoint
+try:
+    health_response = requests.get(f'{INGESTOR_URL}/health', timeout=10)
+    print(f'Health endpoint: {health_response.status_code}')
+    if health_response.status_code == 200:
+        print(f'Health data: {health_response.json()}')
+    else:
+        print(f'Error: {health_response.text}')
+except Exception as e:
+    print(f'Health endpoint error: {e}')
+
+# Test embedding endpoints
+embedding_endpoints = ['/v1/embeddings', '/embeddings', '/api/embeddings', '/embed']
+test_text = "This is a test sentence for embedding."
+
+for endpoint in embedding_endpoints:
+    try:
+        print(f'\nTrying {endpoint}...')
+        response = requests.post(f'{INGESTOR_URL}{endpoint}', 
+                               json={"input": test_text}, 
+                               timeout=10)
+        print(f'  Response: {response.status_code}')
+        if response.status_code == 200:
+            print(f'  Success! Response: {response.json()}')
+            break
+        else:
+            print(f'  Error: {response.text[:200]}...')
+    except Exception as e:
+        print(f'  Exception: {e}')
+
+# Test other possible endpoints
+other_endpoints = ['/', '/docs', '/api', '/api/v1', '/info', '/status']
+for endpoint in other_endpoints:
+    try:
+        response = requests.get(f'{INGESTOR_URL}{endpoint}', timeout=5)
+        print(f'{endpoint}: {response.status_code}')
+        if response.status_code == 200:
+            if 'text/html' in response.headers.get('Content-Type', ''):
+                print(f'  HTML Response: {response.text[:100]}...')
+            else:
+                try:
+                    print(f'  JSON Response: {response.json()}')
+                except:
+                    print(f'  Text Response: {response.text[:100]}...')
+    except Exception as e:
+        print(f'{endpoint}: Error - {e}')
+
+print('\n=== Ingestor Embedding Test Complete ===')

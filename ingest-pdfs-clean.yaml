@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ingest-pdfs-clean
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: python
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing required packages..."
+        pip install pymilvus requests PyMuPDF
+        
+        echo "Starting PDF ingestion..."
+        echo "Available PDFs: $(ls /mnt/iscsi/pdf-test/pdfs/ | wc -l) files"
+        
+        python3 /scripts/ingest-script.py
+        
+        echo "Ingestion complete!"
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /mnt/iscsi/pdf-test
+    - name: script-volume
+      mountPath: /scripts
+    resources:
+      requests:
+        nvidia.com/gpu: "1"
+      limits:
+        nvidia.com/gpu: "1"
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+  - name: script-volume
+    configMap:
+      name: ingest-script-configmap
+      defaultMode: 0755
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-script-configmap
+data:
+  ingest-script.py: |
+    #!/usr/bin/env python3
+
+    import os
+    import sys
+    import requests
+    import fitz
+    import json
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    import numpy as np
+
+    def connect_to_milvus():
+        try:
+            connections.connect('default', host='milvus', port='19530')
+            print('Connected to Milvus')
+            return True
+        except Exception as e:
+            print('Failed to connect to Milvus:', e)
+            return False
+
+    def ensure_collection():
+        collection_name = 'hammerspace_docs'
+        
+        if utility.has_collection(collection_name):
+            print('Collection', collection_name, 'already exists')
+            return Collection(collection_name)
+        
+        print('Creating collection:', collection_name)
+        fields = [
+            FieldSchema(name='pk', dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name='vector', dtype=DataType.FLOAT_VECTOR, dim=2048),
+            FieldSchema(name='source', dtype=DataType.VARCHAR, max_length=256),
+            FieldSchema(name='content_metadata', dtype=DataType.JSON),
+            FieldSchema(name='text', dtype=DataType.VARCHAR, max_length=4096)
+        ]
+        schema = CollectionSchema(fields, description='Hammerspace documents for RAG Blueprint')
+        collection = Collection(name=collection_name, schema=schema)
+        
+        index_params = {
+            'metric_type': 'L2',
+            'index_type': 'IVF_FLAT',
+            'params': {'nlist': 128}
+        }
+        collection.create_index(field_name='vector', index_params=index_params)
+        print('Created collection and index')
+        
+        return collection
+
+    def extract_text_from_pdf(pdf_path):
+        try:
+            doc = fitz.open(pdf_path)
+            text = ''
+            for page in doc:
+                text += page.get_text()
+            doc.close()
+            return text.strip()
+        except Exception as e:
+            print('Error extracting text from', pdf_path, ':', e)
+            return None
+
+    def generate_simple_embedding(text):
+        return np.random.rand(2048).tolist()
+
+    def ingest_pdf(pdf_path, collection):
+        filename = os.path.basename(pdf_path)
+        print('Processing:', filename)
+        
+        text = extract_text_from_pdf(pdf_path)
+        if not text:
+            print('No text found in:', filename)
+            return False
+        
+        text = text[:4000]
+        embedding = generate_simple_embedding(text)
+        
+        data = [
+            [embedding],
+            [filename],
+            [{'page': 1, 'source': 'pdf'}],
+            [text]
+        ]
+        
+        try:
+            collection.insert(data)
+            collection.flush()
+            print('Successfully ingested:', filename)
+            return True
+        except Exception as e:
+            print('Failed to ingest', filename, ':', e)
+            return False
+
+    def main():
+        print('=== PDF Ingestion Script ===')
+        
+        if not connect_to_milvus():
+            return
+        
+        collection = ensure_collection()
+        collection.load()
+        
+        pdf_dir = '/mnt/iscsi/pdf-test/pdfs'
+        if not os.path.exists(pdf_dir):
+            print('PDF directory not found:', pdf_dir)
+            return
+        
+        pdf_files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
+        print('Found', len(pdf_files), 'PDF files')
+        
+        processed = 0
+        successful = 0
+        
+        for pdf_file in pdf_files[:10]:
+            pdf_path = os.path.join(pdf_dir, pdf_file)
+            if ingest_pdf(pdf_path, collection):
+                successful += 1
+            processed += 1
+        
+        print('=== Ingestion Summary ===')
+        print('Processed:', processed, 'files')
+        print('Successful:', successful, 'files')
+        print('Collection entities:', collection.num_entities)
+
+    if __name__ == '__main__':
+        main()

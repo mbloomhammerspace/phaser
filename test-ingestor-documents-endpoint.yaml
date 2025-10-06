@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-ingestor-documents-endpoint
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install requests
+        python3 -c "
+        import requests
+        import json
+        
+        INGESTOR_URL = 'http://ingestor-server:8082'
+        
+        print('=== Testing Ingestor Server Documents Endpoint ===')
+        
+        # Get OpenAPI specification to understand the documents endpoint
+        try:
+            openapi_response = requests.get(f'{INGESTOR_URL}/openapi.json', timeout=5)
+            if openapi_response.status_code == 200:
+                openapi_data = openapi_response.json()
+                paths = openapi_data.get('paths', {})
+                
+                print('Available endpoints:')
+                for path, methods in paths.items():
+                    print(f'  {path}: {list(methods.keys())}')
+                
+                # Check documents endpoint specifically
+                if '/documents' in paths:
+                    docs_path = paths['/documents']
+                    print(f'\\nDocuments endpoint methods: {list(docs_path.keys())}')
+                    
+                    # Check POST method for documents
+                    if 'post' in docs_path:
+                        post_info = docs_path['post']
+                        print(f'POST /documents info:')
+                        print(f'  Summary: {post_info.get(\"summary\", \"N/A\")}')
+                        print(f'  Description: {post_info.get(\"description\", \"N/A\")}')
+                        
+                        # Get request body schema
+                        request_body = post_info.get('requestBody', {})
+                        if request_body:
+                            content = request_body.get('content', {})
+                            if 'application/json' in content:
+                                schema = content['application/json'].get('schema', {})
+                                print(f'  Request schema: {json.dumps(schema, indent=2)}')
+                
+        except Exception as e:
+            print(f'OpenAPI fetch error: {e}')
+        
+        # Test documents endpoint with different payloads
+        test_payloads = [
+            {'text': 'This is a test document for ingestion.'},
+            {'content': 'This is a test document for ingestion.'},
+            {'document': 'This is a test document for ingestion.'},
+            {'documents': [{'text': 'Test document 1'}, {'text': 'Test document 2'}]},
+            {'inputs': 'This is a test document for ingestion.'},
+            {'input': 'This is a test document for ingestion.'}
+        ]
+        
+        for i, payload in enumerate(test_payloads):
+            try:
+                print(f'\\nTesting payload {i+1}: {payload}')
+                response = requests.post(f'{INGESTOR_URL}/documents', json=payload, timeout=10)
+                print(f'  Status: {response.status_code}')
+                if response.status_code in [200, 201, 202]:
+                    print(f'  Success! Response: {response.json()}')
+                elif response.status_code == 422:
+                    print(f'  Validation error: {response.text[:300]}...')
+                elif response.status_code == 400:
+                    print(f'  Bad request: {response.text[:300]}...')
+                else:
+                    print(f'  Error: {response.text[:200]}...')
+            except Exception as e:
+                print(f'  Exception: {e}')
+        
+        # Test GET documents endpoint
+        try:
+            print(f'\\nTesting GET /documents')
+            response = requests.get(f'{INGESTOR_URL}/documents', timeout=10)
+            print(f'  Status: {response.status_code}')
+            if response.status_code == 200:
+                print(f'  Response: {response.json()}')
+            else:
+                print(f'  Error: {response.text[:200]}...')
+        except Exception as e:
+            print(f'  Exception: {e}')
+        
+        print('\\n=== Documents Endpoint Test Complete ===')
+        "

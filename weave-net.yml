@@ -1,0 +1,178 @@
+apiVersion: v1
+kind: List
+items:
+  # This ConfigMap is used to configure a self-hosted Weave Net installation
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: weave-net
+      namespace: kube-system
+      labels:
+        name: weave-net
+    data:
+      # This is the Weave Net configuration to use.
+      weave-conf: |
+        # Disable fastdp by default
+        WEAVE_FASTDP: "false"
+        # Disable IPAM by default
+        WEAVE_NO_IPAM: "false"
+        # Weave Net CIDR (10.32.0.0/12 by default)
+        WEAVE_PASSWORD: ""
+        # Weave Net MTU
+        WEAVE_MTU: "1376"
+        # Weave Net port
+        WEAVE_PORT: "6783"
+        # Weave Net datapath
+        WEAVE_DATAPATH: "datapath"
+        # Weave Net no discovery
+        WEAVE_NO_DISCOVERY: "false"
+        # Weave Net no multicast
+        WEAVE_NO_MULTICAST: "false"
+        # Weave Net no fastdp
+        WEAVE_NO_FASTDP: "true"
+        # Weave Net no plugin
+        WEAVE_NO_PLUGIN: "false"
+        # Weave Net no masq
+        WEAVE_NO_MASQ: "false"
+  ---
+  # This DaemonSet runs Weave Net on each node
+  - apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: weave-net
+      namespace: kube-system
+      labels:
+        name: weave-net
+    spec:
+      # Ensure this pod runs on all nodes
+      selector:
+        matchLabels:
+          name: weave-net
+      template:
+        metadata:
+          labels:
+            name: weave-net
+        spec:
+          # Run on the host network
+          hostNetwork: true
+          # Run with host privileges
+          hostPID: true
+          # Ensure this pod runs on all nodes
+          nodeSelector:
+            kubernetes.io/os: linux
+          # Tolerate all taints
+          tolerations:
+          - operator: Exists
+          # Priority class
+          priorityClassName: system-node-critical
+          # Init container to set up the CNI
+          initContainers:
+        - name: weave-init
+          image: weaveworks/weave-kube:2.8.1
+          command:
+          - /bin/sh
+          - -c
+          - |
+            set -e
+            # Create CNI directory
+            mkdir -p /host/opt/cni/bin
+            mkdir -p /host/etc/cni/net.d
+            # Copy CNI binaries
+            cp /opt/cni/bin/* /host/opt/cni/bin/
+            # Create CNI config
+            cat > /host/etc/cni/net.d/10-weave.conflist <<EOF
+            {
+              "cniVersion": "0.3.1",
+              "name": "weave",
+              "plugins": [
+                {
+                  "name": "weave",
+                  "type": "weave-net",
+                  "hairpinMode": true,
+                  "delegate": {
+                    "isDefaultGateway": true
+                  }
+                },
+                {
+                  "type": "portmap",
+                  "capabilities": {
+                    "portMappings": true
+                  }
+                }
+              ]
+            }
+            EOF
+            # Wait for the main container to start
+            sleep 3600
+          # Mount host directories
+          volumeMounts:
+          - name: cni-bin-dir
+            mountPath: /host/opt/cni/bin
+          - name: cni-net-dir
+            mountPath: /host/etc/cni/net.d
+          # Security context
+          securityContext:
+            privileged: true
+        # Main Weave Net container
+        containers:
+        - name: weave
+          image: weaveworks/weave-kube:2.8.1
+          command:
+          - /home/weave/weaver
+          - --port=6783
+          - --datapath=datapath
+          - --ipalloc-range=10.32.0.0/12
+          - --no-dns
+          - --no-multicast
+          env:
+          - name: HOSTNAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: KUBERNETES_SERVICE_HOST
+            value: "10.233.0.1"
+          - name: KUBERNETES_SERVICE_PORT
+            value: "443"
+          # Mount host directories
+          volumeMounts:
+          - name: cni-bin-dir
+            mountPath: /host/opt/cni/bin
+          - name: cni-net-dir
+            mountPath: /host/etc/cni/net.d
+          - name: dbus
+            mountPath: /host/var/lib/dbus
+            readOnly: true
+          - name: lib-modules
+            mountPath: /lib/modules
+            readOnly: true
+          - name: xtables-lock
+            mountPath: /run/xtables.lock
+          # Security context
+          securityContext:
+            privileged: true
+          # Resource limits
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+        # Volumes
+        volumes:
+        - name: cni-bin-dir
+          hostPath:
+            path: /opt/cni/bin
+        - name: cni-net-dir
+          hostPath:
+            path: /etc/cni/net.d
+        - name: dbus
+          hostPath:
+            path: /var/lib/dbus
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate

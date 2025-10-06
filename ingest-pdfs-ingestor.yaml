@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ingest-pdfs-ingestor
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: ingestor
+    image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+    imagePullPolicy: Always
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Starting PDF ingestion using ingestor-server..."
+        echo "Available PDFs: $(ls /mnt/iscsi/pdf-test/pdfs/ | wc -l) files"
+        
+        # Install required packages
+        pip install pymilvus requests python-multipart
+        
+        # Start the ingestor server in background
+        echo "Starting ingestor server..."
+        uvicorn nvidia_rag.ingestor_server.server:app --host 0.0.0.0 --port 8080 &
+        SERVER_PID=$!
+        
+        # Wait for server to start
+        sleep 30
+        
+        # Test server health
+        echo "Testing ingestor server health..."
+        curl -f http://localhost:8080/health || echo "Server not ready yet"
+        
+        # Ingest a small subset of PDFs first (first 5 files)
+        echo "Ingesting first 5 PDF files..."
+        ls /mnt/iscsi/pdf-test/pdfs/ | head -5 | while read pdf; do
+          echo "Processing: $pdf"
+          
+          # Extract text from PDF using Python
+          python3 -c \"
+import sys
+import requests
+import fitz  # PyMuPDF
+import json
+
+pdf_path = '/mnt/iscsi/pdf-test/pdfs/$pdf'
+try:
+    # Extract text from PDF
+    doc = fitz.open(pdf_path)
+    text = ''
+    for page in doc:
+        text += page.get_text()
+    doc.close()
+    
+    if text.strip():
+        # Send to ingestor server
+        payload = {'text': text[:10000]}  # Limit to first 10k characters
+        response = requests.post('http://localhost:8080/documents', json=payload, timeout=30)
+        if response.status_code == 200:
+            print('✓ Successfully ingested: $pdf')
+        else:
+            print('✗ Failed to ingest: $pdf - Status:', response.status_code)
+    else:
+        print('⚠ No text found in: $pdf')
+        
+except Exception as e:
+    print('✗ Error processing $pdf:', e)
+\"
+          
+          sleep 2  # Brief pause between files
+        done
+        
+        echo "Ingestion complete. Checking collection status..."
+        python3 -c \"
+from pymilvus import connections, Collection, utility
+try:
+    connections.connect('default', host='milvus', port='19530')
+    collections = utility.list_collections()
+    print('Available collections:', collections)
+    
+    if 'hammerspace_docs' in collections:
+        collection = Collection('hammerspace_docs')
+        collection.load()
+        print('Total documents in hammerspace_docs:', collection.num_entities)
+    else:
+        print('hammerspace_docs collection not found')
+except Exception as e:
+    print('Error checking collections:', e)
+\"
+        
+        # Stop the server
+        kill $SERVER_PID 2>/dev/null || true
+        echo "Ingestion process complete."
+    env:
+    - name: MILVUS_HOST
+      value: "milvus"
+    - name: MILVUS_PORT
+      value: "19530"
+    - name: MESSAGE_CLIENT_HOST
+      value: "rag-redis-master"
+    - name: MESSAGE_CLIENT_PORT
+      value: "6379"
+    - name: MESSAGE_CLIENT_TYPE
+      value: "redis"
+    - name: REDIS_HOST
+      value: "rag-redis-master"
+    - name: REDIS_PORT
+      value: "6379"
+    - name: MINIO_ENDPOINT
+      value: "minio:9000"
+    - name: MINIO_ACCESSKEY
+      value: "minioadmin"
+    - name: MINIO_SECRETKEY
+      value: "minioadmin"
+    - name: NVIDIA_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ngc-secret
+          key: api-key
+    - name: NGC_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ngc-secret
+          key: api-key
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+    - name: LOG_LEVEL
+      value: "INFO"
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /mnt/iscsi/pdf-test
+    resources:
+      requests:
+        nvidia.com/gpu: "1"
+      limits:
+        nvidia.com/gpu: "1"
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+  imagePullSecrets:
+  - name: ngc-secret
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

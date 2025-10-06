@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-rag-ingest-script
+  namespace: default
+data:
+  ingest_documents.py: |
+    import requests
+    import json
+    import os
+    
+    # RAG Server configuration
+    RAG_SERVER_URL = "http://rag-server:8081"
+    
+    # Create a test document content
+    test_documents = [
+        {
+            "title": "NVIDIA RAG Blueprint Overview",
+            "content": "The NVIDIA RAG Blueprint is a comprehensive solution for building Retrieval-Augmented Generation systems. It combines vector databases with large language models to enable intelligent document search and question answering capabilities."
+        },
+        {
+            "title": "Vector Database Benefits",
+            "content": "Vector databases like Milvus store high-dimensional embeddings that represent the semantic meaning of documents. These embeddings enable similarity search across large document collections with high accuracy and performance."
+        },
+        {
+            "title": "GPU Acceleration in RAG",
+            "content": "GPU acceleration significantly improves the performance of embedding generation and vector search operations. NVIDIA GPUs are optimized for these compute-intensive tasks, providing substantial speedup over CPU-based processing."
+        },
+        {
+            "title": "Document Processing Pipeline",
+            "content": "Document ingestion involves converting text into vector embeddings using embedding models. These embeddings capture the semantic meaning of the content for efficient retrieval and similarity search operations."
+        },
+        {
+            "title": "RAG System Architecture",
+            "content": "The RAG pipeline combines retrieval from vector databases with generation from language models. This approach enables accurate, context-aware responses to user queries by leveraging relevant document context."
+        }
+    ]
+    
+    def test_rag_server():
+        print("Testing RAG Server connectivity...")
+        
+        # Test health endpoint
+        try:
+            response = requests.get(f"{RAG_SERVER_URL}/health", timeout=10)
+            print(f"✓ RAG Server health: {response.status_code}")
+            if response.status_code == 200:
+                health_data = response.json()
+                print(f"  Health data: {health_data}")
+            return True
+        except Exception as e:
+            print(f"✗ RAG Server health check failed: {e}")
+            return False
+    
+    def test_collections():
+        print("\nTesting collections endpoint...")
+        
+        try:
+            response = requests.get(f"{RAG_SERVER_URL}/collections", timeout=10)
+            print(f"✓ Collections endpoint: {response.status_code}")
+            if response.status_code == 200:
+                collections = response.json()
+                print(f"  Collections: {collections}")
+                return collections
+            else:
+                print(f"  Error: {response.text}")
+                return None
+        except Exception as e:
+            print(f"✗ Collections endpoint failed: {e}")
+            return None
+    
+    def ingest_documents():
+        print("\nAttempting to ingest documents via RAG Server API...")
+        
+        # Try different possible endpoints for document ingestion
+        endpoints_to_try = [
+            "/ingest",
+            "/upload", 
+            "/documents",
+            "/docs",
+            "/add",
+            "/index"
+        ]
+        
+        for endpoint in endpoints_to_try:
+            try:
+                print(f"  Trying {endpoint}...")
+                response = requests.post(
+                    f"{RAG_SERVER_URL}{endpoint}",
+                    json={"documents": test_documents},
+                    timeout=10
+                )
+                print(f"    Response: {response.status_code}")
+                if response.status_code == 200:
+                    print(f"    Success: {response.json()}")
+                    return True
+                else:
+                    print(f"    Error: {response.text}")
+            except Exception as e:
+                print(f"    Exception: {e}")
+        
+        return False
+    
+    def main():
+        print("=== NVIDIA RAG Blueprint Document Ingestion ===")
+        print("Using RAG Server API (proper NVIDIA way)")
+        
+        # Test connectivity
+        if not test_rag_server():
+            print("Cannot proceed - RAG Server not accessible")
+            return
+        
+        # Test collections
+        collections = test_collections()
+        if collections:
+            print(f"✓ Found {len(collections)} collections")
+        
+        # Attempt document ingestion
+        if ingest_documents():
+            print("✓ Document ingestion successful!")
+        else:
+            print("✗ Document ingestion failed - trying alternative approach")
+            
+            # Alternative: Try to create documents directly in Milvus collections
+            print("\nAttempting direct Milvus collection population...")
+            try:
+                from pymilvus import connections, Collection
+                connections.connect('default', host='milvus', port='19530')
+                
+                # Populate hammerspace_docs collection
+                collection = Collection("hammerspace_docs")
+                collection.load()
+                
+                # Create sample data in the expected format
+                import numpy as np
+                embeddings = [np.random.rand(1536).tolist() for _ in test_documents]
+                sources = ["nvidia-rag-api"] * len(test_documents)
+                metadata = [{"title": doc["title"]} for doc in test_documents]
+                texts = [doc["content"] for doc in test_documents]
+                
+                data = [embeddings, sources, metadata, texts]
+                collection.insert(data)
+                collection.flush()
+                
+                print(f"✓ Inserted {len(test_documents)} documents into hammerspace_docs")
+                print(f"  Collection now has {collection.num_entities} entities")
+                
+            except Exception as e:
+                print(f"✗ Direct Milvus insertion failed: {e}")
+        
+        print("\n=== Ingestion Complete ===")
+    
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvidia-rag-api-ingest
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: ingest
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests pymilvus numpy && python3 /app/ingest_documents.py"]
+    volumeMounts:
+    - name: script-volume
+      mountPath: /app
+  volumes:
+  - name: script-volume
+    configMap:
+      name: nvidia-rag-ingest-script

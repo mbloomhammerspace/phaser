@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nv-ingest-simple
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nv-ingest-simple
+  template:
+    metadata:
+      labels:
+        app: nv-ingest-simple
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: nv-ingest
+        image: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+        imagePullPolicy: Always
+        command: ["/workspace/.venv/bin/uvicorn"]
+        args: ["nvidia_rag.ingestor_server.server:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+        - name: MESSAGE_CLIENT_HOST
+          value: "rag-redis-master"
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MESSAGE_CLIENT_TYPE
+          value: "redis"
+        - name: REDIS_HOST
+          value: "rag-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: MINIO_ENDPOINT
+          value: "minio:9000"
+        - name: MINIO_ACCESSKEY
+          value: "minioadmin"
+        - name: MINIO_SECRETKEY
+          value: "minioadmin"
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: NGC_API_KEY
+          value: "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"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+          limits:
+            nvidia.com/gpu: "1"
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nv-ingest-simple-api
+  namespace: default
+spec:
+  selector:
+    app: nv-ingest-simple
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  type: ClusterIP

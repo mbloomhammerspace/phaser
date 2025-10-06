@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rag-api
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox
+    command: ["sh", "-c", "echo 'Testing rag-server API endpoints...' && echo 'Trying /collections endpoint...' && wget -qO- http://rag-server:8081/collections 2>&1 && echo '' && echo 'Trying /databases endpoint...' && wget -qO- http://rag-server:8081/databases 2>&1 && echo '' && echo 'Trying / endpoint...' && wget -qO- http://rag-server:8081/ 2>&1 && echo 'API test complete'"]

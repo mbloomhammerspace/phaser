@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-standalone
+  template:
+    metadata:
+      labels:
+        app: milvus-standalone
+    spec:
+      containers:
+      - name: milvus-standalone
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_USE_EMBEDDED
+          value: "true"
+        - name: ETCD_DATA_DIR
+          value: "/var/lib/milvus/etcd"
+        - name: ETCD_CONFIG_PATH
+          value: "/var/lib/milvus/etcd/etcd.conf.yml"
+        - name: COMMON_STORAGETYPE
+          value: "local"
+        - name: LOCAL_STORAGE_PATH
+          value: "/var/lib/milvus/data"
+        - name: COMMON_LOG_LEVEL
+          value: "info"
+        - name: COMMON_LOG_FORMAT
+          value: "json"
+        ports:
+        - containerPort: 19530
+          name: milvus-grpc
+        - containerPort: 9091
+          name: milvus-http
+        resources:
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+      volumes:
+      - name: milvus-data
+        hostPath:
+          path: /mnt/iscsi/milvus-data
+          type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone
+  namespace: default
+spec:
+  selector:
+    app: milvus-standalone
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: 19530
+      name: milvus-grpc
+    - protocol: TCP
+      port: 9091
+      targetPort: 9091
+      name: milvus-http
+  type: ClusterIP

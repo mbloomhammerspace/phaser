@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestor-external
+  labels:
+    app: ingestor-server
+spec:
+  type: NodePort
+  ports:
+  - port: 8082
+    targetPort: 8082
+    nodePort: 30009
+    protocol: TCP
+  selector:
+    app: ingestor-server

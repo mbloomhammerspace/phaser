@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-test-pdfs-pod
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: check
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Checking pdf-test directory..."
+        ls -la /data/pdf-test
+        echo ""
+        echo "Looking for test-pdfs subdirectory..."
+        find /data/pdf-test -name "*test*" -type d
+        echo ""
+        echo "PDF files in pdf-test directory:"
+        find /data/pdf-test -name "*.pdf" | head -20
+        echo ""
+        echo "Total PDF count in pdf-test:"
+        find /data/pdf-test -name "*.pdf" | wc -l
+    volumeMounts:
+    - name: pdf-storage
+      mountPath: /data
+  volumes:
+  - name: pdf-storage
+    persistentVolumeClaim:
+      claimName: blueprint-storage

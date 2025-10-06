@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: discover-rag-endpoints
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: discover
+    image: python:3.9-slim
+    command: ["sh", "-c", "pip install requests && python3 << 'EOF'
+import requests
+
+base_url = 'http://rag-server:8081'
+
+# Try common FastAPI endpoints
+endpoints_to_try = [
+    '/',
+    '/docs',
+    '/openapi.json',
+    '/redoc',
+    '/health',
+    '/status',
+    '/api/v1',
+    '/api/v1/health',
+    '/api/v1/collections',
+    '/api/v1/documents',
+    '/api/v1/ingest',
+    '/api/v1/upload',
+    '/v1/collections',
+    '/v1/documents',
+    '/v1/ingest',
+    '/v1/upload',
+    '/query',
+    '/search',
+    '/chat'
+]
+
+print('=== Discovering RAG Server Endpoints ===')
+
+for endpoint in endpoints_to_try:
+    try:
+        response = requests.get(f'{base_url}{endpoint}', timeout=5)
+        print(f'{endpoint}: {response.status_code}')
+        if response.status_code == 200:
+            print(f'  Content-Type: {response.headers.get(\"content-type\", \"unknown\")}')
+            if 'application/json' in response.headers.get('content-type', ''):
+                try:
+                    data = response.json()
+                    print(f'  JSON keys: {list(data.keys()) if isinstance(data, dict) else \"not a dict\"}')
+                except:
+                    pass
+            elif response.text and len(response.text) < 500:
+                print(f'  Content preview: {response.text[:100]}...')
+    except Exception as e:
+        print(f'{endpoint}: ERROR - {e}')
+
+print('\\n=== Endpoint Discovery Complete ===')
+EOF"]

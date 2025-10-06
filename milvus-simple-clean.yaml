@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-simple
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-simple
+  template:
+    metadata:
+      labels:
+        app: milvus-simple
+    spec:
+      containers:
+      - name: milvus-simple
+        image: milvusdb/milvus:v2.3.0
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_USE_EMBEDDED
+          value: "true"
+        - name: ETCD_DATA_DIR
+          value: "/tmp/etcd"
+        - name: COMMON_STORAGETYPE
+          value: "local"
+        - name: LOCAL_STORAGE_PATH
+          value: "/tmp/milvus"
+        - name: COMMON_LOG_LEVEL
+          value: "info"
+        - name: COMMON_RESTFUL_API
+          value: "true"
+        - name: COMMON_RESTFUL_PORT
+          value: "9091"
+        ports:
+        - containerPort: 19530
+          name: milvus-grpc
+        - containerPort: 9091
+          name: milvus-http
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+            nvidia.com/gpu: "1"
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-simple
+  namespace: default
+spec:
+  selector:
+    app: milvus-simple
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: 19530
+      name: milvus-grpc
+    - protocol: TCP
+      port: 9091
+      targetPort: 9091
+      name: milvus-http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: default
+spec:
+  selector:
+    app: milvus-simple
+  ports:
+    - protocol: TCP
+      port: 19530
+      targetPort: 19530
+      name: milvus-grpc
+    - protocol: TCP
+      port: 9091
+      targetPort: 9091
+      name: milvus-http
+  type: ClusterIP

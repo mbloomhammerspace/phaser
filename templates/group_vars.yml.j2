@@ -1,5 +1,5 @@
 # Kubespray Configuration
-kube_version: v1.28.0
+kube_version: v1.31.0
 container_manager: containerd
 network_plugin: calico
 dns_mode: coredns
@@ -9,7 +9,7 @@ local_path_provisioner_enabled: true
 
 # Container runtime
 containerd_config:
-  version: 1.6.21
+  version: 1.7.13
   systemd_cgroup: true
 
 # Network configuration

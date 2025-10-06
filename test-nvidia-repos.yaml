@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nvidia-repo
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851
+  containers:
+  - name: test
+    image: nvcr.io/nvidia/blueprint/rag-server:2.2.0
+    command: ["echo", "NVIDIA Blueprint repo test successful"]
+    env:
+    - name: NGC_API_KEY
+      value: "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"
+  imagePullSecrets:
+  - name: ngc-secret
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

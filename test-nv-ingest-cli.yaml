@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nv-ingest-cli
+  namespace: default
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251003-1851  # GPU node
+  containers:
+  - name: nv-ingest
+    image: nvcr.io/nvidia/nim/nv-ingest:24.10
+    imagePullPolicy: Always
+    command: ["/bin/bash"]
+    args: ["-c", "echo 'Creating test PDF...' && echo 'Test Document Content' > /tmp/test.txt && echo 'Testing nv-ingest CLI...' && nv-ingest-cli --help || echo 'nv-ingest-cli not found' && echo 'Available commands:' && ls -la /workspace/ && echo 'Environment:' && env | grep -E '(MILVUS|REDIS|MINIO)' && sleep 300"]
+    env:
+    - name: NIM_MODEL_PROFILE
+      value: "6097695b532c9abe549de9918de6b4702eda625f27b508acd7b7dcc04f38ebe1"
+    - name: MESSAGE_CLIENT_HOST
+      value: "rag-redis-master"
+    - name: MESSAGE_CLIENT_PORT
+      value: "6379"
+    - name: MILVUS_HOST
+      value: "milvus"
+    - name: MILVUS_PORT
+      value: "19530"
+    - name: MINIO_ENDPOINT
+      value: "minio:9000"
+    - name: MINIO_ACCESSKEY
+      value: "minioadmin"
+    - name: MINIO_SECRETKEY
+      value: "minioadmin"
+    resources:
+      requests:
+        nvidia.com/gpu: "1"
+      limits:
+        nvidia.com/gpu: "1"
+  imagePullSecrets:
+  - name: ngc-secret
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"

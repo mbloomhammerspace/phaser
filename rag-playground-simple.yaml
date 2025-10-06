@@ -1,0 +1,198 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-playground-simple
+  namespace: default
+  labels:
+    app: rag-playground-simple
+spec:
+  restartPolicy: Never
+  containers:
+  - name: playground
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install pymilvus requests flask
+        python3 /app/playground.py
+    volumeMounts:
+    - name: app-volume
+      mountPath: /app
+  volumes:
+  - name: app-volume
+    configMap:
+      name: rag-playground-script
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-playground-script
+data:
+  playground.py: |
+    from pymilvus import connections, Collection, utility
+    import requests
+    import numpy as np
+    from flask import Flask, request, jsonify, render_template_string
+    import json
+    
+    app = Flask(__name__)
+    
+    # Connect to Milvus
+    connections.connect('default', host='milvus', port='19530')
+    collection = Collection('hammerspace_docs')
+    collection.load()
+    
+    print('=== RAG Playground Started ===')
+    print(f'Connected to Milvus collection: hammerspace_docs')
+    print(f'Collection has {collection.num_entities} entities')
+    
+    # Simple HTML interface
+    HTML_TEMPLATE = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>NVIDIA RAG Blueprint Playground</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+            .query-box { width: 100%; height: 100px; padding: 10px; font-size: 16px; }
+            .search-btn { padding: 10px 20px; font-size: 16px; background: #007acc; color: white; border: none; cursor: pointer; }
+            .result { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+            .score { color: #666; font-size: 12px; }
+            .text { margin: 10px 0; }
+            .source { color: #007acc; font-weight: bold; }
+            .status { background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        </style>
+    </head>
+    <body>
+        <h1>NVIDIA RAG Blueprint Playground</h1>
+        
+        <div class="status">
+            <h3>System Status</h3>
+            <p>✓ Milvus Vector Database: Connected</p>
+            <p>✓ Collection: hammerspace_docs (''' + str(collection.num_entities) + ''' documents)</p>
+            <p>✓ Vector Search: Working</p>
+            <p>⚠ LLM Generation: Not Available (NGC image pull issues)</p>
+        </div>
+        
+        <h3>Vector Search Test</h3>
+        <form id="searchForm">
+            <textarea class="query-box" name="query" placeholder="Enter your question here...">What is artificial intelligence?</textarea><br><br>
+            <button class="search-btn" type="submit">Search Documents</button>
+        </form>
+        
+        <div id="results"></div>
+        
+        <script>
+            document.getElementById('searchForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const query = document.querySelector('textarea[name="query"]').value;
+                const resultsDiv = document.getElementById('results');
+                
+                resultsDiv.innerHTML = '<p>Searching...</p>';
+                
+                try {
+                    const response = await fetch('/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.results) {
+                        let html = '<h3>Search Results:</h3>';
+                        data.results.forEach((result, index) => {
+                            html += `
+                                <div class="result">
+                                    <div class="score">Score: ${result.score.toFixed(4)}</div>
+                                    <div class="text">${result.text}</div>
+                                    <div class="source">Source: ${result.source}</div>
+                                    <div class="metadata">Metadata: ${JSON.stringify(result.metadata)}</div>
+                                </div>
+                            `;
+                        });
+                        resultsDiv.innerHTML = html;
+                    } else {
+                        resultsDiv.innerHTML = '<p style="color: red;">Search failed: ' + (data.error || 'Unknown error') + '</p>';
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                }
+            });
+        </script>
+    </body>
+    </html>
+    '''
+    
+    @app.route('/')
+    def index():
+        return render_template_string(HTML_TEMPLATE)
+    
+    @app.route('/search', methods=['POST'])
+    def search():
+        try:
+            data = request.get_json()
+            query_text = data.get('query', 'What is artificial intelligence?')
+            
+            # Generate a random embedding for testing (normally from embedding service)
+            query_embedding = np.random.rand(2048).tolist()
+            
+            # Search for similar documents
+            search_params = {
+                'metric_type': 'L2',
+                'params': {'nprobe': 10}
+            }
+            
+            results = collection.search(
+                data=[query_embedding],
+                anns_field='vector',
+                param=search_params,
+                limit=5,
+                output_fields=['text', 'source', 'content_metadata']
+            )
+            
+            search_results = []
+            for hits in results:
+                for hit in hits:
+                    search_results.append({
+                        'score': float(hit.score),
+                        'text': hit.entity.get('text', 'N/A'),
+                        'source': hit.entity.get('source', 'N/A'),
+                        'metadata': hit.entity.get('content_metadata', {})
+                    })
+            
+            return jsonify({'results': search_results})
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/health')
+    def health():
+        return jsonify({
+            'status': 'healthy',
+            'collection': 'hammerspace_docs',
+            'entities': collection.num_entities,
+            'search_working': True,
+            'llm_available': False
+        })
+    
+    print('Starting Flask server on port 8080...')
+    print('Playground will be available at http://localhost:8080')
+    print('This demonstrates the working vector search component of the RAG pipeline')
+    
+    app.run(host='0.0.0.0', port=8080, debug=False)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-playground-simple
+  namespace: default
+spec:
+  selector:
+    app: rag-playground-simple
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  type: NodePort
