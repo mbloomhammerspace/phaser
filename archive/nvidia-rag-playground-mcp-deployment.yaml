@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nvidia-rag-playground-mcp
+  namespace: default
+  labels:
+    app: nvidia-rag-playground-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nvidia-rag-playground-mcp
+  template:
+    metadata:
+      labels:
+        app: nvidia-rag-playground-mcp
+    spec:
+      containers:
+      - name: rag-playground
+        image: nvcr.io/nvidia/blueprint/rag-playground:2.2.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: RAG_SERVER_URL
+          value: "http://rag-server:8000"
+        volumeMounts:
+        - name: mcp-config
+          mountPath: /app/src/app/context/SettingsContext.tsx
+          subPath: SettingsContext.tsx
+        - name: mcp-config
+          mountPath: /app/src/app/components/RightSidebar/Settings.tsx
+          subPath: Settings.tsx
+        resources:
+          limits:
+            memory: 2Gi
+            cpu: 1
+          requests:
+            memory: 1Gi
+            cpu: 0.5
+      volumes:
+      - name: mcp-config
+        configMap:
+          name: nvidia-rag-mcp-configmap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nvidia-rag-playground-mcp
+  namespace: default
+spec:
+  type: NodePort
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30082
+  selector:
+    app: nvidia-rag-playground-mcp

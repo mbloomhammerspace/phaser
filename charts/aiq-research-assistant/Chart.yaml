@@ -1,0 +1,16 @@
+apiVersion: v2
+name: aiq-research-assistant
+version: 0.1.0
+description: Helm chart to deploy the AI-Q Research Assistant backend and proxy for Kubernetes
+home: https://github.com/NVIDIA-AI-Blueprints/aiq-research-assistant
+keywords:
+  - ai
+  - rag
+  - nvidia
+  - research-assistant
+  - blueprint
+maintainers:
+  - name: phaser-ops
+    email: ops@example.com
+appVersion: "0.1.0"
+type: application

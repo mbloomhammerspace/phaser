@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: final-ingest-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== FINAL INGESTION TEST ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo "2. Testing collections endpoint..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo "3. Creating test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "test_collection"}'
+          echo ""
+          echo "4. Testing document upload..."
+          echo "This is a test document for RAG ingestion. It contains information about testing the NVIDIA RAG Blueprint system. The document includes details about vector databases, embeddings, and retrieval-augmented generation." > test.txt
+          curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@test.txt" \
+            -F 'data={"collection_name": "test_collection"}'
+          echo ""
+          echo "5. Verifying collection..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo "=== INGESTION TEST COMPLETE ==="
+      restartPolicy: Never

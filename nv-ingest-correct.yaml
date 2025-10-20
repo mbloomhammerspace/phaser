@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nv-ingest-ms-runtime
+  namespace: default
+  labels:
+    app: nv-ingest-ms-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nv-ingest-ms-runtime
+  template:
+    metadata:
+      labels:
+        app: nv-ingest-ms-runtime
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251010-1127
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      imagePullSecrets:
+      - name: ngc-secret
+      containers:
+      - name: nv-ingest
+        image: nvcr.io/nvidia/nemo-microservices/nv-ingest:25.6.2
+        ports:
+        - containerPort: 7670
+        - containerPort: 7671
+        env:
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: NGC_API_KEY
+          value: "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"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: MAX_INGEST_PROCESS_WORKERS
+          value: "16"
+        - name: EMBEDDING_NIM_MODEL_NAME
+          value: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        - name: EMBEDDING_NIM_ENDPOINT
+          value: "http://nemoretriever-embedding-ms:8000/v1"
+        - name: MESSAGE_CLIENT_HOST
+          value: "redis"
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MESSAGE_CLIENT_TYPE
+          value: "redis"
+        - name: INGEST_LOG_LEVEL
+          value: "DEFAULT"
+        - name: INGEST_EDGE_BUFFER_SIZE
+          value: "64"
+        - name: INGEST_DYNAMIC_MEMORY_THRESHOLD
+          value: "0.8"
+        - name: INGEST_DISABLE_DYNAMIC_SCALING
+          value: "True"
+        - name: REDIS_MORPHEUS_TASK_QUEUE
+          value: "morpheus_task_queue"
+        - name: NV_INGEST_MAX_UTIL
+          value: "48"
+        - name: READY_CHECK_ALL_COMPONENTS
+          value: "False"
+        - name: MRC_IGNORE_NUMA_CHECK
+          value: "1"
+        - name: MODEL_PREDOWNLOAD_PATH
+          value: "/workspace/models/"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "32Gi"
+            cpu: "8"
+          requests:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nv-ingest-ms-runtime
+  namespace: default
+spec:
+  selector:
+    app: nv-ingest-ms-runtime
+  ports:
+  - port: 7670
+    targetPort: 7670
+    name: http
+  - port: 7671
+    targetPort: 7671
+    name: broker
+  type: ClusterIP

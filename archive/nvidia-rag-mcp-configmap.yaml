@@ -1,0 +1,489 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-rag-mcp-configmap
+  namespace: default
+data:
+  SettingsContext.tsx: |
+    // SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+    // SPDX-License-Identifier: Apache-2.0
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+
+    "use client";
+
+    import { createContext, useContext, useState, ReactNode } from "react";
+
+    export interface MetadataField {
+      name: string;
+      type: "string" | "datetime";
+      optional?: boolean;
+    }
+
+    interface SettingsContextType {
+      temperature: number;
+      topP: number;
+      vdbTopK: number;
+      rerankerTopK: number;
+      confidenceScoreThreshold: number;
+      useGuardrails: boolean;
+      includeCitations: boolean;
+      mcpClientEnabled: boolean;
+      metadataSchema: MetadataField[];
+      setMetadataSchema: (schema: MetadataField[]) => void;
+      setTemperature: (value: number) => void;
+      setTopP: (value: number) => void;
+      setVdbTopK: (value: number) => void;
+      setRerankerTopK: (value: number) => void;
+      setConfidenceScoreThreshold: (value: number) => void;
+      setUseGuardrails: (value: boolean) => void;
+      setIncludeCitations: (value: boolean) => void;
+      setMcpClientEnabled: (value: boolean) => void;
+    }
+
+    const MIN_TEMPERATURE = 0.1;
+    const MIN_TOP_P = 0.1;
+    const DEFAULT_VDB_TOPK = 100;
+    const DEFAULT_RERANKER_TOPK = 10;
+    const DEFAULT_CONFIDENCE_THRESHOLD = 0.0;
+    const MIN_CONFIDENCE_THRESHOLD = 0.0;
+    const MAX_CONFIDENCE_THRESHOLD = 1.0;
+
+    const SettingsContext = createContext<SettingsContextType | undefined>(
+      undefined
+    );
+
+    export function SettingsProvider({ children }: { children: ReactNode }) {
+      const [temperature, setTemperatureState] = useState(0.5);
+      const [topP, setTopPState] = useState(0.9);
+      const [vdbTopK, setVdbTopKState] = useState(DEFAULT_VDB_TOPK);
+      const [rerankerTopK, setRerankerTopKState] = useState(DEFAULT_RERANKER_TOPK);
+      const [confidenceScoreThreshold, setConfidenceScoreThresholdState] = useState(DEFAULT_CONFIDENCE_THRESHOLD);
+      const [useGuardrails, setUseGuardrails] = useState(false);
+      const [includeCitations, setIncludeCitations] = useState(true);
+      const [mcpClientEnabled, setMcpClientEnabled] = useState(true);
+      const [metadataSchema, setMetadataSchema] = useState<MetadataField[]>([]);
+
+      const setTemperature = (value: number) => {
+        setTemperatureState(Math.max(MIN_TEMPERATURE, value));
+      };
+
+      const setTopP = (value: number) => {
+        setTopPState(Math.max(MIN_TOP_P, value));
+      };
+
+      // VDB topK must be >= rerankerTopK
+      const setVdbTopK = (value: number) => {
+        const newValue = Math.max(1, value);
+        setVdbTopKState(Math.max(newValue, rerankerTopK));
+      };
+
+      // Reranker topK must be <= vdbTopK
+      const setRerankerTopK = (value: number) => {
+        const newValue = Math.max(1, value);
+        setRerankerTopKState(Math.min(newValue, vdbTopK));
+      };
+
+      const setConfidenceScoreThreshold = (value: number) => {
+        // Ensure the value is within 0-1 range
+        const newValue = Math.max(MIN_CONFIDENCE_THRESHOLD, Math.min(MAX_CONFIDENCE_THRESHOLD, value));
+        setConfidenceScoreThresholdState(newValue);
+      };
+
+      return (
+        <SettingsContext.Provider
+          value={{
+            temperature,
+            topP,
+            vdbTopK,
+            rerankerTopK,
+            confidenceScoreThreshold,
+            useGuardrails,
+            includeCitations,
+            mcpClientEnabled,
+            metadataSchema,
+            setMetadataSchema,
+            setTemperature,
+            setTopP,
+            setVdbTopK,
+            setRerankerTopK,
+            setConfidenceScoreThreshold,
+            setUseGuardrails,
+            setIncludeCitations,
+            setMcpClientEnabled,
+          }}
+        >
+          {children}
+        </SettingsContext.Provider>
+      );
+    }
+
+    export function useSettings() {
+      const context = useContext(SettingsContext);
+      if (context === undefined) {
+        throw new Error("useSettings must be used within a SettingsProvider");
+      }
+      return context;
+    }
+
+  Settings.tsx: |
+    // SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+    // SPDX-License-Identifier: Apache-2.0
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+
+    "use client";
+
+    import { useState, useEffect } from "react";
+    import { useSettings } from "../../context/SettingsContext";
+    import MetadataSchemaEditor from "./MetadataSchemaEditor"; // ✅ NEW
+
+    export default function Settings() {
+      const {
+        temperature,
+        topP,
+        vdbTopK,
+        rerankerTopK,
+        confidenceScoreThreshold,
+        useGuardrails,
+        includeCitations,
+        mcpClientEnabled,
+        setTemperature,
+        setTopP,
+        setVdbTopK,
+        setRerankerTopK,
+        setConfidenceScoreThreshold,
+        setUseGuardrails,
+        setIncludeCitations,
+        setMcpClientEnabled,
+      } = useSettings();
+
+      const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+        ragConfig: true,
+        outputPrefs: true,
+        metadata: true,
+        mcpControl: true,
+      });
+
+      const [vdbTopKInput, setVdbTopKInput] = useState(vdbTopK.toString());
+      const [rerankerTopKInput, setRerankerTopKInput] = useState(
+        rerankerTopK.toString()
+      );
+
+      const toggleSection = (section: string) => {
+        setExpandedSections((prev) => ({
+          ...prev,
+          [section]: !prev[section],
+        }));
+      };
+
+      const handleVdbTopKChange = (value: string) => {
+        setVdbTopKInput(value);
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue) && numValue > 0) {
+          setVdbTopK(numValue);
+        }
+      };
+
+      const handleRerankerTopKChange = (value: string) => {
+        setRerankerTopKInput(value);
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue) && numValue > 0) {
+          setRerankerTopK(numValue);
+        }
+      };
+
+      // Update input values when context values change
+      useEffect(() => {
+        setVdbTopKInput(vdbTopK.toString());
+        setRerankerTopKInput(rerankerTopK.toString());
+      }, [vdbTopK, rerankerTopK]);
+
+      return (
+        <div className="text-white">
+          <div className="mb-8">
+            <button
+              onClick={() => toggleSection("ragConfig")}
+              className="mb-4 flex w-full items-center justify-between text-sm font-medium hover:text-gray-300"
+            >
+              <span>RAG Configuration Parameters</span>
+              <span className="transform transition-transform duration-200">
+                {expandedSections.ragConfig ? "▼" : "▶"}
+              </span>
+            </button>
+
+            <div
+              className={`space-y-6 transition-all duration-200 ${
+                expandedSections.ragConfig ? "block" : "hidden"
+              }`}
+            >
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm">Temperature</label>
+                  <input
+                    type="number"
+                    value={temperature}
+                    onChange={(e) => setTemperature(Number(e.target.value))}
+                    className="w-16 rounded bg-neutral-800 px-2 py-1 text-sm"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                  />
+                </div>
+                <input
+                  type="range"
+                  value={temperature}
+                  onChange={(e) => setTemperature(Number(e.target.value))}
+                  className="w-full accent-[var(--nv-green)]"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Controls the creativity of the model. Higher values enable more
+                  creative outputs, suitable for tasks such as creative writing. A
+                  value within the [0.5, 0.8] range is a good starting point for
+                  experimentation.
+                </p>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm">Top P</label>
+                  <input
+                    type="number"
+                    value={topP}
+                    onChange={(e) => setTopP(Number(e.target.value))}
+                    className="w-16 rounded bg-neutral-800 px-2 py-1 text-sm"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                  />
+                </div>
+                <input
+                  type="range"
+                  value={topP}
+                  onChange={(e) => setTopP(Number(e.target.value))}
+                  className="w-full accent-[var(--nv-green)]"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  The number of times the entire dataset is propagated through the
+                  network during training.
+                </p>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm">Vector Database Top K</label>
+                  <input
+                    type="number"
+                    value={vdbTopK}
+                    onChange={(e) => handleVdbTopKChange(e.target.value)}
+                    className={`w-24 rounded bg-neutral-800 px-3 py-2 text-sm ${
+                      vdbTopK < rerankerTopK ? "border border-red-500" : ""
+                    }`}
+                    min="1"
+                    aria-label="Vector Database Top K"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  The number of top-ranked vectors retrieved from a vector database
+                  (VDB) during inference. Must be greater than or equal to Reranker
+                  Top K.
+                </p>
+                {vdbTopK !== parseInt(vdbTopKInput, 10) &&
+                  !isNaN(parseInt(vdbTopKInput, 10)) && (
+                    <p className="mt-1 text-xs text-amber-400">
+                      Value adjusted to maintain VDB Top K ≥ Reranker Top K
+                      constraint.
+                    </p>
+                  )}
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm">Reranker Top K</label>
+                  <input
+                    type="number"
+                    value={rerankerTopK}
+                    onChange={(e) => handleRerankerTopKChange(e.target.value)}
+                    className={`w-24 rounded bg-neutral-800 px-3 py-2 text-sm ${
+                      rerankerTopK > vdbTopK ? "border border-red-500" : ""
+                    }`}
+                    min="1"
+                    aria-label="Reranker Top K"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  The number of top-ranked documents or knowledge chunks retrieved
+                  from a retriever model before passing them to the AI for response
+                  generation. Must be less than or equal to VDB Top K.
+                </p>
+                {rerankerTopK !== parseInt(rerankerTopKInput, 10) &&
+                  !isNaN(parseInt(rerankerTopKInput, 10)) && (
+                    <p className="mt-1 text-xs text-amber-400">
+                      Value adjusted to maintain VDB Top K ≥ Reranker Top K
+                      constraint.
+                    </p>
+                  )}
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm">Confidence Score Threshold</label>
+                  <input
+                    type="number"
+                    value={confidenceScoreThreshold.toFixed(2)}
+                    onChange={(e) => {
+                      const newValue = Number(e.target.value);
+                      console.log(`Setting confidence threshold to: ${newValue}`);
+                      setConfidenceScoreThreshold(newValue);
+                    }}
+                    className="w-16 rounded bg-neutral-800 px-2 py-1 text-sm"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                  />
+                </div>
+                <input
+                  type="range"
+                  value={confidenceScoreThreshold}
+                  onChange={(e) => {
+                    const newValue = Number(e.target.value);
+                    console.log(`Setting confidence threshold to: ${newValue} (from slider)`);
+                    setConfidenceScoreThreshold(newValue);
+                  }}
+                  className="w-full accent-[var(--nv-green)]"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Filter chunks based on their confidence score (0-1 scale). Higher threshold values will 
+                  only include chunks with higher confidence, potentially improving precision 
+                  but reducing recall.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <button
+              onClick={() => toggleSection("outputPrefs")}
+              className="mb-4 flex w-full items-center justify-between text-sm font-medium hover:text-gray-300"
+            >
+              <span>Output Preferences</span>
+              <span className="transform transition-transform duration-200">
+                {expandedSections.outputPrefs ? "▼" : "▶"}
+              </span>
+            </button>
+            <div
+              className={`space-y-4 transition-all duration-200 ${
+                expandedSections.outputPrefs ? "block" : "hidden"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Guardrails</p>
+                  <p className="text-xs text-gray-400">
+                    Apply guardrails to every response
+                  </p>
+                </div>
+                <button
+                  onClick={() => setUseGuardrails(!useGuardrails)}
+                  className={`h-6 w-11 rounded-full transition-colors ${useGuardrails ? "bg-[var(--nv-green)]" : "bg-neutral-800"} relative`}
+                >
+                  <span
+                    className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                      useGuardrails ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Citations</p>
+                  <p className="text-xs text-gray-400">
+                    Include citations from sources
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIncludeCitations(!includeCitations)}
+                  className={`h-6 w-11 rounded-full transition-colors ${includeCitations ? "bg-[var(--nv-green)]" : "bg-neutral-800"} relative`}
+                >
+                  <span
+                    className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                      includeCitations ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <button
+              onClick={() => toggleSection("mcpControl")}
+              className="mb-4 flex w-full items-center justify-between text-sm font-medium hover:text-gray-300"
+            >
+              <span>MCP Client Control</span>
+              <span className="transform transition-transform duration-200">
+                {expandedSections.mcpControl ? "▼" : "▶"}
+              </span>
+            </button>
+            <div
+              className={`space-y-4 transition-all duration-200 ${
+                expandedSections.mcpControl ? "block" : "hidden"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">MCP Client</p>
+                  <p className="text-xs text-gray-400">
+                    Enable/disable MCP client functionality
+                  </p>
+                </div>
+                <button
+                  onClick={() => setMcpClientEnabled(!mcpClientEnabled)}
+                  className={`h-6 w-11 rounded-full transition-colors ${mcpClientEnabled ? "bg-[var(--nv-green)]" : "bg-red-600"} relative`}
+                >
+                  <span
+                    className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                      mcpClientEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="text-xs text-gray-400">
+                <p>Status: <span className={mcpClientEnabled ? "text-green-400" : "text-red-400"}>{mcpClientEnabled ? "Enabled" : "Disabled"}</span></p>
+                <p>Last toggle: {new Date().toLocaleTimeString()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }

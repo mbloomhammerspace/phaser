@@ -1,0 +1,299 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mcp-settings-server
+  namespace: default
+  labels:
+    app: mcp-settings-server
+spec:
+  restartPolicy: Always
+  containers:
+  - name: mcp-settings
+    image: python:3.11-slim
+    ports:
+    - containerPort: 8081
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing Flask..."
+        pip install flask
+        echo "Starting MCP Settings Server..."
+        python3 /scripts/mcp-settings-server.py
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: script-volume
+    configMap:
+      name: mcp-settings-script
+      defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-settings-service
+  namespace: default
+spec:
+  selector:
+    app: mcp-settings-server
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+      nodePort: 32510
+  type: NodePort
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-settings-script
+  namespace: default
+data:
+  mcp-settings-server.py: |
+    from flask import Flask, request, jsonify, render_template_string
+    import json
+    import os
+    import logging
+    import time
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    app = Flask(__name__)
+
+    # MCP Settings - Global state
+    MCP_GLOBAL_ENABLED = True
+    MCP_AUTO_CONNECT = True
+
+    @app.route('/')
+    def index():
+        return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>MCP Settings Control Panel</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+                .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #333; text-align: center; }
+                .settings-panel { background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; margin: 20px 0; border-radius: 5px; }
+                .setting-item { margin-bottom: 15px; }
+                .setting-item label { display: flex; align-items: center; cursor: pointer; font-weight: 500; }
+                .setting-item input[type="checkbox"] { margin-right: 10px; transform: scale(1.3); }
+                .setting-item small { display: block; color: #6c757d; font-size: 0.9em; margin-top: 5px; margin-left: 30px; }
+                .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+                .btn:hover { background: #0056b3; }
+                .btn.danger { background: #dc3545; }
+                .btn.danger:hover { background: #c82333; }
+                .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+                .status.enabled { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+                .status.disabled { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔌 MCP Services Control Panel</h1>
+                
+                <div id="status" class="status enabled">
+                    <strong>MCP Services Status:</strong> <span id="status-text">Enabled</span>
+                </div>
+                
+                <div class="settings-panel">
+                    <h3>⚙️ Settings</h3>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="mcp-global-toggle" checked onchange="toggleMCPGlobal()">
+                            Enable MCP Services
+                        </label>
+                        <small>Master switch to enable/disable all MCP functionality</small>
+                    </div>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="mcp-auto-connect" checked onchange="toggleMCPAutoConnect()">
+                            Auto-connect MCP Servers
+                        </label>
+                        <small>Automatically connect to available MCP servers</small>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn" onclick="enableMCP()">Enable All MCP Services</button>
+                    <button class="btn danger" onclick="disableMCP()">Disable All MCP Services</button>
+                    <button class="btn" onclick="loadSettings()">Refresh Settings</button>
+                </div>
+            </div>
+
+            <script>
+                let mcpGlobalEnabled = true;
+                let mcpAutoConnect = true;
+
+                async function toggleMCPGlobal() {
+                    mcpGlobalEnabled = document.getElementById('mcp-global-toggle').checked;
+                    
+                    try {
+                        const response = await fetch('/mcp/settings', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ mcp_global_enabled: mcpGlobalEnabled })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('Settings updated:', result);
+                            updateStatus();
+                        }
+                    } catch (e) {
+                        console.error('Error updating settings:', e);
+                    }
+                }
+
+                async function toggleMCPAutoConnect() {
+                    mcpAutoConnect = document.getElementById('mcp-auto-connect').checked;
+                    
+                    try {
+                        const response = await fetch('/mcp/settings', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ mcp_auto_connect: mcpAutoConnect })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('Auto-connect settings updated:', result);
+                        }
+                    } catch (e) {
+                        console.error('Error updating auto-connect settings:', e);
+                    }
+                }
+
+                async function enableMCP() {
+                    try {
+                        const response = await fetch('/mcp/enable', { method: 'POST' });
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('MCP enabled:', result);
+                            loadSettings();
+                        }
+                    } catch (e) {
+                        console.error('Error enabling MCP:', e);
+                    }
+                }
+
+                async function disableMCP() {
+                    try {
+                        const response = await fetch('/mcp/disable', { method: 'POST' });
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('MCP disabled:', result);
+                            loadSettings();
+                        }
+                    } catch (e) {
+                        console.error('Error disabling MCP:', e);
+                    }
+                }
+
+                async function loadSettings() {
+                    try {
+                        const response = await fetch('/mcp/settings');
+                        if (response.ok) {
+                            const settings = await response.json();
+                            mcpGlobalEnabled = settings.mcp_global_enabled;
+                            mcpAutoConnect = settings.mcp_auto_connect;
+                            
+                            document.getElementById('mcp-global-toggle').checked = mcpGlobalEnabled;
+                            document.getElementById('mcp-auto-connect').checked = mcpAutoConnect;
+                            
+                            updateStatus();
+                        }
+                    } catch (e) {
+                        console.error('Error loading settings:', e);
+                    }
+                }
+
+                function updateStatus() {
+                    const statusDiv = document.getElementById('status');
+                    const statusText = document.getElementById('status-text');
+                    
+                    if (mcpGlobalEnabled) {
+                        statusDiv.className = 'status enabled';
+                        statusText.textContent = 'Enabled';
+                    } else {
+                        statusDiv.className = 'status disabled';
+                        statusText.textContent = 'Disabled';
+                    }
+                }
+
+                // Load settings on page load
+                document.addEventListener('DOMContentLoaded', loadSettings);
+            </script>
+        </body>
+        </html>
+        ''')
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "healthy", "service": "mcp-settings-server"})
+
+    @app.route('/mcp/settings', methods=['GET'])
+    def get_mcp_settings():
+        """Get current MCP settings"""
+        return jsonify({
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+            "mcp_auto_connect": MCP_AUTO_CONNECT
+        })
+
+    @app.route('/mcp/settings', methods=['POST'])
+    def update_mcp_settings():
+        """Update MCP settings"""
+        global MCP_GLOBAL_ENABLED, MCP_AUTO_CONNECT
+        
+        try:
+            data = request.get_json()
+            
+            if 'mcp_global_enabled' in data:
+                MCP_GLOBAL_ENABLED = bool(data['mcp_global_enabled'])
+                logger.info(f"MCP Global Enabled: {MCP_GLOBAL_ENABLED}")
+            
+            if 'mcp_auto_connect' in data:
+                MCP_AUTO_CONNECT = bool(data['mcp_auto_connect'])
+                logger.info(f"MCP Auto-connect: {MCP_AUTO_CONNECT}")
+            
+            return jsonify({
+                "message": "MCP settings updated successfully",
+                "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+                "mcp_auto_connect": MCP_AUTO_CONNECT
+            })
+            
+        except Exception as e:
+            logger.error(f"Error updating MCP settings: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/disable', methods=['POST'])
+    def disable_mcp():
+        """Disable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = False
+        logger.info("MCP services disabled via API")
+        return jsonify({
+            "message": "All MCP services have been disabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    @app.route('/mcp/enable', methods=['POST'])
+    def enable_mcp():
+        """Enable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = True
+        logger.info("MCP services enabled via API")
+        return jsonify({
+            "message": "All MCP services have been enabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    if __name__ == '__main__':
+        print("=== MCP Settings Control Panel ===")
+        print("🚀 Starting Flask server on port 8081...")
+        print("🌐 MCP Settings Panel will be available at http://localhost:8081")
+        print("🔌 Features: Enable/Disable MCP Services, Auto-connect Settings")
+        app.run(host='0.0.0.0', port=8081, debug=False)

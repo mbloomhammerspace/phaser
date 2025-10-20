@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-build-nvidia-key
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-docker
+    image: docker:27-dind
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🔐 Testing build.nvidia.com API Key..."
+        echo "======================================================"
+        
+        # Start Docker daemon
+        dockerd &
+        sleep 8
+        
+        # The new build.nvidia.com key
+        BUILD_KEY="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"
+        
+        echo ""
+        echo "🔑 Testing NGC login with build.nvidia.com key..."
+        echo "$BUILD_KEY" | docker login nvcr.io --username '$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Login successful with build.nvidia.com key!"
+            echo ""
+            echo "======================================================"
+            echo "📦 Testing Critical Image Pulls..."
+            echo "======================================================"
+            echo ""
+            
+            # Test 1: Blueprint RAG Playground
+            echo "Test 1: Blueprint RAG Playground (2.2.0)..."
+            docker pull nvcr.io/nvidia/blueprint/rag-playground:2.2.0
+            if [ $? -eq 0 ]; then
+                echo "✅ Blueprint RAG Playground: SUCCESS"
+                BLUEPRINT_OK=1
+            else
+                echo "❌ Blueprint RAG Playground: FAILED"
+                BLUEPRINT_OK=0
+            fi
+            
+            echo ""
+            
+            # Test 2: NIM LLM (Llama 3.1)
+            echo "Test 2: NIM LLM (llama3-8b-instruct)..."
+            docker pull nvcr.io/nim/meta/llama3-8b-instruct:latest
+            if [ $? -eq 0 ]; then
+                echo "✅ NIM LLM: SUCCESS"
+                NIM_LLM_OK=1
+            else
+                echo "❌ NIM LLM: FAILED"
+                NIM_LLM_OK=0
+            fi
+            
+            echo ""
+            
+            # Test 3: Ingestor Server
+            echo "Test 3: Ingestor Server (2.2.0)..."
+            docker pull nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+            if [ $? -eq 0 ]; then
+                echo "✅ Ingestor Server: SUCCESS"
+                INGESTOR_OK=1
+            else
+                echo "❌ Ingestor Server: FAILED"
+                INGESTOR_OK=0
+            fi
+            
+            echo ""
+            echo "======================================================"
+            echo "📊 Final Results:"
+            echo "======================================================"
+            echo "Blueprint RAG Playground: $([ $BLUEPRINT_OK -eq 1 ] && echo '✅ SUCCESS' || echo '❌ FAILED')"
+            echo "NIM LLM (Llama):          $([ $NIM_LLM_OK -eq 1 ] && echo '✅ SUCCESS' || echo '❌ FAILED')"
+            echo "Ingestor Server:          $([ $INGESTOR_OK -eq 1 ] && echo '✅ SUCCESS' || echo '❌ FAILED')"
+            echo ""
+            
+            if [ $BLUEPRINT_OK -eq 1 ] || [ $NIM_LLM_OK -eq 1 ] || [ $INGESTOR_OK -eq 1 ]; then
+                echo "🎉 build.nvidia.com KEY WORKS!"
+                echo "✅ Ready to deploy NIM services"
+            else
+                echo "⚠️  Key authenticates but may need different image tags"
+            fi
+        else
+            echo "❌ Login failed with build.nvidia.com key"
+            echo "This key may not be valid for nvcr.io"
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "Test complete."
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        memory: 8Gi
+        cpu: 2
+      requests:
+        memory: 4Gi
+        cpu: 1

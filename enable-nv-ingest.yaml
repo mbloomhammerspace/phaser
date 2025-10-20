@@ -1,0 +1,27 @@
+nv-ingest:
+  enabled: true
+  replicas: 4  # Use multiple replicas for parallel processing
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+    requests:
+      nvidia.com/gpu: 1
+
+nemoretriever-embedding-ms:
+  enabled: true
+  replicas: 2
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+    requests:
+      nvidia.com/gpu: 1
+
+nemoretriever-reranking-ms:
+  enabled: true
+  replicas: 1
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+    requests:
+      nvidia.com/gpu: 1
+

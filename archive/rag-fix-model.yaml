@@ -1,0 +1,7 @@
+rag-server:
+  env:
+    - name: APP_LLM_MODELNAME
+      value: "meta/llama3-8b-instruct"
+    - name: APP_LLM_SERVERURL
+      value: "http://nim-llm-deploy:8000"
+

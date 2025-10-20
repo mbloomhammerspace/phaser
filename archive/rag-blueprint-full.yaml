@@ -1,0 +1,200 @@
+# NVIDIA RAG Blueprint v2.2.0 - Full Configuration
+# All NIMs and components enabled for complete RAG pipeline
+
+# Global settings
+namespace: default
+replicaCount: 1
+
+# NGC API Secret (for pulling NVIDIA images)
+ngcApiSecret:
+  create: true
+  name: ngc-api
+  password: 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
+
+imagePullSecret:
+  create: true
+  name: ngc-secret
+  password: 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
+
+# Frontend (Playground)
+frontend:
+  enabled: true
+  replicaCount: 1
+
+# RAG Server
+envVars:
+  APP_LLM_MODELNAME: meta/llama3-8b-instruct
+  APP_LLM_SERVERURL: http://nim-llm:8000
+  APP_EMBEDDINGS_MODELNAME: nvidia/llama-3.2-nv-embedqa-1b-v2
+  APP_EMBEDDINGS_SERVERURL: http://embedding-nim:8000
+  APP_RANKING_MODELNAME: nvidia/llama-3.2-nv-rerankqa-1b-v2
+  APP_RANKING_SERVERURL: http://reranking-nim:8000
+  APP_VECTORSTORE_NAME: milvus
+  APP_VECTORSTORE_URL: http://milvus:19530
+  ENABLE_CITATIONS: "True"
+  ENABLE_RERANKER: "True"
+  LOGLEVEL: INFO
+
+# Ingestor Server
+ingestor-server:
+  enabled: true
+  replicaCount: 3  # Multiple replicas for parallel ingestion
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+  nv-ingest:
+    enabled: true
+    replicaCount: 1
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        cpu: "8"
+        memory: 32Gi
+      requests:
+        nvidia.com/gpu: 1
+        cpu: "4"
+        memory: 16Gi
+    tolerations:
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      operator: Exists
+  redis:
+    enabled: true
+    auth:
+      enabled: false
+    master:
+      persistence:
+        enabled: true
+        size: 8Gi
+        storageClass: local-path
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: "1"
+          memory: 2Gi
+    replica:
+      persistence:
+        enabled: true
+        size: 8Gi
+        storageClass: local-path
+
+# LLM NIM
+nim-llm:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: nvcr.io/nim/meta/llama3-8b-instruct
+    tag: "1.0.3"
+  model:
+    ngcAPIKey: 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
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 50Gi
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 32Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+  service:
+    type: ClusterIP
+    port: 8000
+    name: nim-llm
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+
+# Embedding NIM
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+  replicaCount: 3  # Multiple for parallel embedding generation
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2
+    tag: "1.2.2"
+  model:
+    ngcAPIKey: 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
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 20Gi
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  service:
+    type: ClusterIP
+    port: 8000
+    name: embedding-nim
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+
+# Reranking NIM
+text-reranking-nim:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-rerankqa-1b-v2
+    tag: "1.2.2"
+  model:
+    ngcAPIKey: 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
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 20Gi
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  service:
+    type: ClusterIP
+    port: 8000
+    name: reranking-nim
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+
+# Milvus (keep existing external one)
+milvus:
+  enabled: false  # Using existing milvus-external-etcd-clean
+
+# Observability (optional, can enable later)
+zipkin:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30411
+
+attu:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30001
+
+opentelemetry-collector:
+  enabled: true
+
+kube-prometheus-stack:
+  enabled: false
+

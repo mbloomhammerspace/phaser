@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-pdf-ingest
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-ingest
+        image: python:3.11
+        command:
+        - /bin/bash
+        - -c
+        - |
+          pip install requests
+          echo "Creating test PDF..."
+          echo "This is a test document for RAG ingestion." > test.txt
+          echo "Testing ingestor-server API..."
+          python3 -c "
+          import requests
+          import json
+          
+          # Test health
+          try:
+              r = requests.get('http://ingestor-server:8082/health', timeout=10)
+              print(f'Health: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Health failed: {e}')
+          
+          # Create collection
+          try:
+              r = requests.post('http://ingestor-server:8082/collection', 
+                              json={'collection_name': 'test_collection'}, timeout=30)
+              print(f'Collection: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Collection failed: {e}')
+          
+          # Test with text document
+          try:
+              with open('test.txt', 'r') as f:
+                  content = f.read()
+              
+              files = {'documents': ('test.txt', content, 'text/plain')}
+              data = {'data': json.dumps({'collection_name': 'test_collection'})}
+              
+              r = requests.post('http://ingestor-server:8082/documents',
+                              files=files, data=data, timeout=120)
+              print(f'Ingestion: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Ingestion failed: {e}')
+          "
+      restartPolicy: Never

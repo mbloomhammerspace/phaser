@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-playground-mcp-updated
+  namespace: default
+  labels:
+    app: rag-playground-mcp
+spec:
+  restartPolicy: Always
+  containers:
+  - name: playground-mcp
+    image: node:18-alpine
+    ports:
+    - containerPort: 3000
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing dependencies..."
+        npm install -g serve
+        echo "Copying built application..."
+        cp -r /app/.next /tmp/next-build
+        cp -r /app/public /tmp/public
+        cp /app/package.json /tmp/
+        echo "Starting production server..."
+        cd /tmp && npx serve -s . -l 3000
+    volumeMounts:
+    - name: app-volume
+      mountPath: /app
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    env:
+    - name: NODE_ENV
+      value: "production"
+  volumes:
+  - name: app-volume
+    hostPath:
+      path: /Users/mike/phaser/nvidia-rag-frontend
+      type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-playground-mcp-updated-service
+  namespace: default
+spec:
+  selector:
+    app: rag-playground-mcp
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30082
+    protocol: TCP
+  type: NodePort

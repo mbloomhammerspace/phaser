@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-29-test-pdfs
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: pdf-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== INGESTING 29 TEST PDFs ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo "2. Creating test_pdfs collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "test_pdfs"}'
+          echo ""
+          echo "3. Creating 29 test documents..."
+          for i in $(seq 1 29); do
+            echo "Creating test document $i..."
+            echo "Test Document $i for RAG Ingestion" > "test_doc_$i.txt"
+            echo "" >> "test_doc_$i.txt"
+            echo "This is test document number $i created for testing the NVIDIA RAG Blueprint system." >> "test_doc_$i.txt"
+            echo "It contains information about vector databases, embeddings, and retrieval-augmented generation." >> "test_doc_$i.txt"
+            echo "" >> "test_doc_$i.txt"
+            echo "Document $i includes:" >> "test_doc_$i.txt"
+            echo "- Vector database concepts" >> "test_doc_$i.txt"
+            echo "- Embedding generation" >> "test_doc_$i.txt"
+            echo "- RAG pipeline testing" >> "test_doc_$i.txt"
+            echo "- Document processing" >> "test_doc_$i.txt"
+            echo "- Search and retrieval" >> "test_doc_$i.txt"
+            echo "" >> "test_doc_$i.txt"
+            echo "This document should be processed and stored in the Milvus vector database for testing purposes." >> "test_doc_$i.txt"
+          done
+          echo ""
+          echo "4. Uploading all 29 test documents..."
+          success=0
+          failed=0
+          for i in $(seq 1 29); do
+            echo "Uploading test_doc_$i.txt..."
+            response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+              -F "documents=@test_doc_$i.txt" \
+              -F 'data={"collection_name": "test_pdfs"}')
+            echo "Response: $response"
+            if echo "$response" | grep -q "task_id"; then
+              echo "  ✅ Success"
+              success=$((success + 1))
+            else
+              echo "  ❌ Failed"
+              failed=$((failed + 1))
+            fi
+            sleep 1
+          done
+          echo ""
+          echo "5. Summary:"
+          echo "  ✅ Successful uploads: $success"
+          echo "  ❌ Failed uploads: $failed"
+          echo "  📊 Total documents: $((success + failed))"
+          echo ""
+          echo "6. Verifying collection..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo "=== INGESTION COMPLETE ==="
+      restartPolicy: Never

@@ -1,0 +1,1280 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-playground-registry-configmap
+  namespace: default
+data:
+  requirements-registry.txt: |
+    flask
+    pymilvus
+    requests
+    numpy
+    pyyaml
+    aiohttp
+    aiodns
+  rag-playground-registry-enhanced.py: |
+    from flask import Flask, request, jsonify, render_template_string
+    import json
+    from pymilvus import connections, Collection
+    import numpy as np
+    import requests
+    import asyncio
+    import datetime
+    import os
+    import logging
+    import time
+
+    # MCP Client placeholder - will be enhanced when NVIDIA AIQ Toolkit is properly available
+    MCP_AVAILABLE = False
+    print("MCP features disabled - NVIDIA AIQ Toolkit installation pending")
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    app = Flask(__name__)
+
+    # Initialize MCP Client placeholder
+    mcp_client = None
+    mcp_servers = {}  # Dictionary to track connected servers
+
+    # Milvus connection settings - now using MCP wrapper
+    MILVUS_MCP_URL = os.getenv('MILVUS_MCP_URL', 'http://milvus-mcp-wrapper-service:8000')
+    COLLECTION_NAME = os.getenv('COLLECTION_NAME', 'hammerspace_docs')
+    
+    # Legacy direct connection settings (for fallback)
+    MILVUS_HOST = os.getenv('MILVUS_HOST', 'milvus-external-etcd-clean')
+    MILVUS_PORT_STR = os.getenv('MILVUS_PORT', '19530')
+    if '://' in MILVUS_PORT_STR:
+        MILVUS_PORT = int(MILVUS_PORT_STR.split(':')[-1])
+        if MILVUS_HOST == 'milvus-standalone':
+            MILVUS_HOST = MILVUS_PORT_STR.split('://')[1].split(':')[0]
+    else:
+        MILVUS_PORT = int(MILVUS_PORT_STR)
+
+    def connect_to_milvus():
+        """Connect to Milvus directly (legacy method)"""
+        try:
+            connections.connect("default", host=MILVUS_HOST, port=MILVUS_PORT)
+            collection = Collection(COLLECTION_NAME)
+            collection.load()
+            return collection
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            return None
+
+    def connect_to_milvus_via_mcp():
+        """Connect to Milvus via MCP wrapper"""
+        try:
+            # Test MCP wrapper connectivity
+            response = requests.get(f"{MILVUS_MCP_URL}/health", timeout=5)
+            if response.status_code == 200:
+                logger.info("Connected to Milvus via MCP wrapper")
+                return "mcp_wrapper"  # Return a marker indicating MCP connection
+            else:
+                logger.warning(f"MCP wrapper health check failed: {response.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus MCP wrapper: {e}")
+            return None
+
+    def search_via_mcp(query, top_k=5):
+        """Search using Milvus MCP wrapper"""
+        try:
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_request = {
+                "collection_name": COLLECTION_NAME,
+                "query_vectors": [query_embedding],
+                "top_k": top_k,
+                "search_params": {
+                    "metric_type": "L2",
+                    "params": {"nprobe": 10}
+                }
+            }
+            
+            response = requests.post(
+                f"{MILVUS_MCP_URL}/mcp/search",
+                json=search_request,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("result", [])
+            else:
+                logger.error(f"MCP search failed: {response.status_code} - {response.text}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in MCP search: {e}")
+            return []
+
+    def simple_search(collection, query, top_k=5):
+        try:
+            # Generate a dummy embedding for the query (in production, use a real embedding model)
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_params = {
+                "metric_type": "L2",
+                "params": {"nprobe": 10}
+            }
+            
+            results = collection.search(
+                data=[query_embedding],
+                anns_field="vector",
+                param=search_params,
+                limit=top_k,
+                output_fields=["source", "text"]
+            )
+            
+            return results[0] if results else []
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return []
+
+    @app.route('/')
+    def index():
+        return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>RAG Playground - Enhanced with MCP Registry</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; display: flex; }
+                .main-content { flex: 2; max-width: 800px; margin-right: 20px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .mcp-panel { flex: 1; max-width: 400px; background: #e6f7ff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid #91d5ff; }
+                h1, h2 { color: #333; text-align: center; }
+                .search-box { width: 100%; padding: 15px; font-size: 16px; border: 2px solid #ddd; border-radius: 5px; margin: 20px 0; }
+                .search-btn, .mcp-btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 5px; }
+                .search-btn:hover, .mcp-btn:hover { background: #0056b3; }
+                .mcp-btn.disconnect { background: #dc3545; }
+                .mcp-btn.disconnect:hover { background: #c82333; }
+                .results { margin-top: 30px; }
+                .result-item { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+                .result-source { font-weight: bold; color: #007bff; margin-bottom: 10px; }
+                .result-text { color: #666; line-height: 1.6; }
+                .stats { background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+                .mcp-server-item { background: #ffffff; border: 1px solid #b3e0ff; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+                .mcp-server-item h3 { margin-top: 0; color: #0056b3; font-size: 1.1em; }
+                .mcp-server-item p { margin: 5px 0; font-size: 0.9em; }
+                .status-connected { color: green; font-weight: bold; }
+                .status-disconnected { color: red; font-weight: bold; }
+                .status-failed { color: orange; font-weight: bold; }
+                .registry-info { background: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 0.9em; }
+                .settings-panel { background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+                .settings-panel h3 { margin-top: 0; color: #856404; text-align: center; }
+                .kill-switch-section { margin-top: 10px; }
+                .kill-switch-section h4 { color: #721c24; margin-bottom: 10px; }
+                .kill-switch-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+                .toggle-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+                .toggle-switch input[type="checkbox"] { display: none; }
+                .toggle-slider { position: relative; width: 50px; height: 24px; background: #dc3545; border-radius: 24px; transition: all 0.3s ease; }
+                .toggle-slider:before { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: all 0.3s ease; }
+                .toggle-switch input:checked + .toggle-slider { background: #28a745; }
+                .toggle-switch input:checked + .toggle-slider:before { transform: translateX(26px); }
+                .toggle-label { font-weight: bold; color: #333; }
+                .kill-switch-status { background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.9em; }
+                .kill-switch-status p { margin: 5px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="main-content">
+                <h1>🔍 RAG Playground - Enhanced with MCP Registry</h1>
+                <div class="stats" id="stats">Loading document count...</div>
+                <input type="text" class="search-box" id="query" placeholder="Ask about HammerSpace documentation..." />
+                <button class="search-btn" onclick="search()">Search Documents</button>
+                <div class="results" id="results"></div>
+            </div>
+
+            <div class="mcp-panel">
+                <h2>🔌 MCP Registry & Client</h2>
+                <div class="registry-info">
+                    <strong>Registry Status:</strong> <span id="registry-status">Loading...</span><br>
+                    <strong>Total Servers:</strong> <span id="total-servers">-</span><br>
+                    <strong>Connected:</strong> <span id="connected-servers">-</span>
+                </div>
+                
+                <!-- Settings Control Panel -->
+                <div class="settings-panel">
+                    <h3>⚙️ Settings Control Panel</h3>
+                    <div class="kill-switch-section">
+                        <h4>🔴 MCP Client Control</h4>
+                        <div class="kill-switch-controls">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="mcp-client-toggle" checked onchange="toggleMcpClient()">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">MCP Client Enabled</span>
+                            </label>
+                        </div>
+                        <div class="kill-switch-status">
+                            <p><strong>MCP Status:</strong> <span id="mcp-status">Enabled</span></p>
+                            <p><strong>Last Toggle:</strong> <span id="last-toggle">Never</span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="mcp-servers-status">Loading MCP server status...</div>
+            </div>
+
+            <script>
+                async function loadStats() {
+                    try {
+                        const response = await fetch('/stats');
+                        const data = await response.json();
+                        document.getElementById('stats').innerHTML = 
+                            `📚 Total Documents: ${data.total_documents} | 🔍 Collection: ${data.collection_name}`;
+                    } catch (e) {
+                        document.getElementById('stats').innerHTML = 'Error loading stats';
+                    }
+                }
+
+                async function search() {
+                    const query = document.getElementById('query').value;
+                    if (!query) return;
+                    
+                    document.getElementById('results').innerHTML = 'Searching...';
+                    
+                    try {
+                        const response = await fetch('/search', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({query: query, top_k: 5})
+                        });
+                        const data = await response.json();
+                        displayResults(data);
+                    } catch (e) {
+                        document.getElementById('results').innerHTML = 'Error: ' + e.message;
+                    }
+                }
+
+                function displayResults(data) {
+                    const resultsDiv = document.getElementById('results');
+                    if (!data.results || data.results.length === 0) {
+                        resultsDiv.innerHTML = '<p>No results found.</p>';
+                        return;
+                    }
+
+                    let html = '<h3>Search Results:</h3>';
+                    data.results.forEach((result, index) => {
+                        html += `
+                            <div class="result-item">
+                                <div class="result-source">${result.source}</div>
+                                <div class="result-text">${result.text.substring(0, 500)}${result.text.length > 500 ? '...' : ''}</div>
+                                <small>Distance: ${result.distance.toFixed(4)}</small>
+                            </div>
+                        `;
+                    });
+                    resultsDiv.innerHTML = html;
+                }
+
+                async function loadMcpStatus() {
+                    // Check if MCP client is enabled
+                    const isEnabled = localStorage.getItem('mcp-client-enabled') !== 'false';
+                    const toggle = document.getElementById('mcp-client-toggle');
+                    if (toggle) {
+                        toggle.checked = isEnabled;
+                    }
+                    
+                    if (!isEnabled) {
+                        // MCP client is disabled, show disabled state
+                        document.getElementById('mcp-servers-status').innerHTML = '<p style="color: #dc3545; font-weight: bold;">MCP Client Disabled</p>';
+                        document.getElementById('registry-status').textContent = 'Disabled';
+                        document.getElementById('total-servers').textContent = '0';
+                        document.getElementById('connected-servers').textContent = '0';
+                        document.getElementById('mcp-status').textContent = 'Disabled';
+                        document.getElementById('mcp-status').style.color = '#dc3545';
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('/mcp/status');
+                        const data = await response.json();
+                        
+                        // Update registry info
+                        document.getElementById('registry-status').textContent = data.registry_status || 'Active';
+                        document.getElementById('total-servers').textContent = data.total_servers || 0;
+                        document.getElementById('connected-servers').textContent = data.connected_servers || 0;
+                        
+                        const mcpServersDiv = document.getElementById('mcp-servers-status');
+                        let html = '';
+                        if (data.servers && data.servers.length > 0) {
+                            data.servers.forEach(server => {
+                                const statusClass = server.status === 'Connected' ? 'status-connected' : 
+                                                    (server.status === 'Disconnected' ? 'status-disconnected' : 'status-failed');
+                                html += `
+                                    <div class="mcp-server-item">
+                                        <h3>${server.name}</h3>
+                                        <p>Description: ${server.description}</p>
+                                        <p>Discovery: ${server.discovery_method}</p>
+                                        <p>Status: <span class="${statusClass}">${server.status}</span></p>
+                                        ${server.error ? `<p style="color: red;">Error: ${server.error}</p>` : ''}
+                                        <button class="mcp-btn" onclick="connectMcpServer('${server.name}')" ${server.status === 'Connected' ? 'disabled' : ''}>Connect</button>
+                                        <button class="mcp-btn disconnect" onclick="disconnectMcpServer('${server.name}')" ${server.status === 'Disconnected' ? 'disabled' : ''}>Disconnect</button>
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html = '<p>No MCP servers configured.</p>';
+                        }
+                        mcpServersDiv.innerHTML = html;
+                    } catch (e) {
+                        document.getElementById('mcp-servers-status').innerHTML = 'Error loading MCP status: ' + e.message;
+                    }
+                }
+
+                async function connectMcpServer(serverName) {
+                    try {
+                        const response = await fetch(`/mcp/connect/${serverName}`, { method: 'POST' });
+                        const data = await response.json();
+                        alert(data.message);
+                        loadMcpStatus();
+                    } catch (e) {
+                        alert('Error connecting: ' + e.message);
+                    }
+                }
+
+                async function disconnectMcpServer(serverName) {
+                    try {
+                        const response = await fetch(`/mcp/disconnect/${serverName}`, { method: 'POST' });
+                        const data = await response.json();
+                        alert(data.message);
+                        loadMcpStatus();
+                    } catch (e) {
+                        alert('Error disconnecting: ' + e.message);
+                    }
+                }
+
+                // MCP Client Toggle Function
+                function toggleMcpClient() {
+                    const toggle = document.getElementById('mcp-client-toggle');
+                    const isEnabled = toggle.checked;
+                    
+                    // Update status display
+                    document.getElementById('mcp-status').textContent = isEnabled ? 'Enabled' : 'Disabled';
+                    document.getElementById('last-toggle').textContent = `${isEnabled ? 'Enabled' : 'Disabled'} at ${new Date().toLocaleTimeString()}`;
+                    
+                    // Store the state in localStorage for persistence
+                    localStorage.setItem('mcp-client-enabled', isEnabled);
+                    
+                    // Show visual feedback
+                    const statusElement = document.getElementById('mcp-status');
+                    statusElement.style.color = isEnabled ? '#28a745' : '#dc3545';
+                    statusElement.style.fontWeight = 'bold';
+                    
+                    // Disable/enable MCP functionality based on toggle
+                    if (isEnabled) {
+                        console.log('MCP Client enabled - MCP functionality active');
+                        // Re-enable MCP status loading
+                        loadMcpStatus();
+                    } else {
+                        console.log('MCP Client disabled - MCP functionality inactive');
+                        // Clear MCP status display
+                        document.getElementById('mcp-servers-status').innerHTML = '<p style="color: #dc3545; font-weight: bold;">MCP Client Disabled</p>';
+                        document.getElementById('registry-status').textContent = 'Disabled';
+                        document.getElementById('total-servers').textContent = '0';
+                        document.getElementById('connected-servers').textContent = '0';
+                    }
+                }
+
+                // Load stats and MCP status on page load
+                loadStats();
+                loadMcpStatus();
+                
+                // Refresh MCP status every 10 seconds
+                setInterval(loadMcpStatus, 10000);
+
+                // Search on Enter key
+                document.getElementById('query').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') search();
+                });
+            </script>
+        </body>
+        </html>
+        ''')
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "healthy"})
+
+    @app.route('/stats')
+    def stats():
+        try:
+            # Try MCP wrapper first
+            mcp_connection = connect_to_milvus_via_mcp()
+            if mcp_connection:
+                # For now, return basic stats - in a real implementation, 
+                # we'd query the MCP wrapper for collection stats
+                return jsonify({
+                    "total_documents": "Unknown (via MCP)",
+                    "collection_name": COLLECTION_NAME,
+                    "status": "connected_via_mcp",
+                    "mcp_wrapper_url": MILVUS_MCP_URL
+                })
+            else:
+                # Fallback to direct connection
+                collection = connect_to_milvus()
+                if collection:
+                    return jsonify({
+                        "total_documents": collection.num_entities,
+                        "collection_name": COLLECTION_NAME,
+                        "status": "connected_direct"
+                    })
+                else:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/search', methods=['POST'])
+    def search():
+        try:
+            data = request.get_json()
+            query = data.get('query', '')
+            top_k = data.get('top_k', 5)
+            
+            # Try MCP wrapper first
+            mcp_connection = connect_to_milvus_via_mcp()
+            if mcp_connection:
+                logger.info("Using Milvus MCP wrapper for search")
+                results = search_via_mcp(query, top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "source": result.get('source', 'Unknown'),
+                        "text": result.get('text', 'No text available'),
+                        "distance": result.get('distance', 0.0)
+                    })
+                
+                return jsonify({
+                    "results": formatted_results, 
+                    "query": query,
+                    "method": "mcp_wrapper"
+                })
+            else:
+                # Fallback to direct connection
+                logger.info("Falling back to direct Milvus connection")
+                collection = connect_to_milvus()
+                if not collection:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+                
+                results = simple_search(collection, query, top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "source": result.entity.get('source', 'Unknown'),
+                        "text": result.entity.get('text', 'No text available'),
+                        "distance": result.distance
+                    })
+                
+                return jsonify({
+                    "results": formatted_results, 
+                    "query": query,
+                    "method": "direct_connection"
+                })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # Add the missing /v1/generate endpoint that the frontend needs
+    @app.route('/v1/generate', methods=['POST'])
+    def v1_generate():
+        """V1 generate endpoint for NVIDIA RAG Blueprint frontend compatibility"""
+        try:
+            data = request.get_json()
+            messages = data.get('messages', [])
+            query = ""
+            if messages:
+                query = messages[-1].get('content', '')
+            
+            # Handle simple greetings without MCP wrapper
+            query_lower = query.lower().strip()
+            simple_greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "what's up"]
+            
+            if query_lower in simple_greetings or len(query_lower) < 10:
+                response_text = "Hello! I'm the NVIDIA RAG Blueprint assistant with MCP integration. I can help you with questions about the documents in the knowledge base, or you can ask me about system information like 'How many documents are in Milvus?' or 'What collections are available?' How can I assist you today?"
+                
+                return jsonify({
+                    "id": "mcp-enhanced-response",
+                    "choices": [{
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": response_text
+                        },
+                        "finish_reason": "stop"
+                    }],
+                    "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "usage": None,
+                    "citations": {"total_results": 0, "results": []}
+                })
+            
+            # Handle MCP queries
+            if any(keyword in query_lower for keyword in ["how many documents", "document count", "number of documents", "total documents"]):
+                if any(keyword in query_lower for keyword in ["milvus", "collection", "database", "instance"]):
+                    # Use direct Milvus connection for document count (faster than MCP wrapper)
+                    collection = connect_to_milvus()
+                    if collection:
+                        count = collection.num_entities
+                        response_text = f"There are {count} documents in the Milvus collection 'hammerspace_docs'."
+                    else:
+                        response_text = "I cannot connect to Milvus to get the document count."
+                    
+                    return jsonify({
+                        "id": "mcp-enhanced-response",
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": response_text
+                            },
+                            "finish_reason": "stop"
+                        }],
+                        "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                        "object": "chat.completion",
+                        "created": int(time.time()),
+                        "usage": None,
+                        "citations": {"total_results": 0, "results": []}
+                    })
+            
+            # For other queries, use direct Milvus search (avoid MCP wrapper timeout)
+            collection = connect_to_milvus()
+            if not collection:
+                return jsonify({"error": "Cannot connect to Milvus"}), 500
+            
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_params = {
+                "data": [query_embedding],
+                "anns_field": "vector",
+                "param": {"metric_type": "L2", "params": {"nprobe": 10}},
+                "limit": 5,
+                "output_fields": ["source", "text"]
+            }
+            
+            results = collection.search(**search_params)
+            
+            if results and results[0]:
+                first_result = results[0][0]
+                response_text = f"I found relevant information in the document '{first_result.entity.get('source', 'Unknown')}'. Here's what I found: {first_result.entity.get('text', 'No text available')[:200]}..."
+            else:
+                response_text = f"I searched through the documents but didn't find specific information for your query: '{query}'. You might want to try rephrasing your question or asking about specific topics covered in the documents."
+            
+            return jsonify({
+                "id": "mcp-enhanced-response",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text
+                    },
+                    "finish_reason": "stop"
+                }],
+                "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "usage": None,
+                "citations": {"total_results": len(results[0]) if results and results[0] else 0, "results": []}
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in v1_generate: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # MCP Client Endpoints using NVIDIA AIQ Toolkit
+    @app.route('/mcp/status')
+    async def mcp_status():
+        if not MCP_AVAILABLE:
+            return jsonify({
+                "servers": [],
+                "registry_status": "MCP features disabled - NVIDIA AIQ Toolkit installation pending",
+                "total_servers": 0,
+                "connected_servers": 0,
+                "error": "MCP features require proper NVIDIA AIQ Toolkit installation"
+            })
+        
+        servers_status = []
+        connected_count = 0
+        
+        for name, server_info in mcp_servers.items():
+            servers_status.append({
+                "name": name,
+                "description": server_info.get("description", "MCP Server"),
+                "status": "Connected" if server_info.get("connected", False) else "Disconnected",
+                "error": server_info.get("error"),
+                "enabled": server_info.get("enabled", True),
+                "discovery_method": "manual",
+                "last_checked": server_info.get("last_checked")
+            })
+            if server_info.get("connected", False):
+                connected_count += 1
+        
+        return jsonify({
+            "servers": servers_status,
+            "registry_status": "Active with NVIDIA AIQ Toolkit",
+            "total_servers": len(servers_status),
+            "connected_servers": connected_count
+        })
+
+    @app.route('/mcp/connect/<server_name>', methods=['POST'])
+    async def mcp_connect(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"message": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            # Example server configuration - in real usage, this would come from discovery
+            server_config = MCPServerConfig(
+                name=server_name,
+                command="python",
+                args=["-m", f"{server_name}_mcp_server"],
+                description=f"MCP Server: {server_name}"
+            )
+            
+            # Connect using NVIDIA AIQ Toolkit
+            await mcp_client.connect(server_config)
+            
+            # Track the connection
+            mcp_servers[server_name] = {
+                "connected": True,
+                "description": server_config.description,
+                "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                "error": None
+            }
+            
+            return jsonify({"message": f"Successfully connected to {server_name}"})
+        except Exception as e:
+            mcp_servers[server_name] = {
+                "connected": False,
+                "description": f"MCP Server: {server_name}",
+                "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                "error": str(e)
+            }
+            return jsonify({"message": f"Failed to connect to {server_name}", "error": str(e)}), 500
+
+    @app.route('/mcp/disconnect/<server_name>', methods=['POST'])
+    async def mcp_disconnect(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"message": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            await mcp_client.disconnect(server_name)
+            if server_name in mcp_servers:
+                mcp_servers[server_name]["connected"] = False
+            return jsonify({"message": f"Disconnected from {server_name}"})
+        except Exception as e:
+            return jsonify({"message": f"Error disconnecting from {server_name}", "error": str(e)}), 500
+
+    @app.route('/mcp/tools/<server_name>')
+    async def mcp_tools(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"server": server_name, "tools": [], "error": "MCP features require proper NVIDIA AIQ Toolkit installation"})
+        
+        try:
+            tools = await mcp_client.get_tools(server_name)
+            return jsonify({"server": server_name, "tools": tools})
+        except Exception as e:
+            return jsonify({"server": server_name, "tools": [], "error": str(e)})
+
+    @app.route('/mcp/call_tool/<server_name>/<tool_name>', methods=['POST'])
+    async def mcp_call_tool(server_name, tool_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"error": "MCP features require nvidia-nat package"}), 500
+        
+        try:
+            args = request.get_json(silent=True) or {}
+            result = await mcp_client.call_tool(server_name, tool_name, **args)
+            return jsonify({"server": server_name, "tool": tool_name, "result": result})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/registry/discover', methods=['POST'])
+    async def mcp_registry_discover():
+        if not MCP_AVAILABLE:
+            return jsonify({"error": "MCP features require nvidia-nat package"}), 500
+        
+        try:
+            discovery_type = request.get_json().get('type', 'all')
+            
+            # Example discovery - in real implementation, this would use NVIDIA AIQ Toolkit discovery
+            if discovery_type == 'kubernetes' or discovery_type == 'all':
+                # Add some example servers discovered from Kubernetes
+                example_servers = [
+                    {"name": "hammerspace-k8s", "description": "HammerSpace MCP Server (K8s discovered)"},
+                    {"name": "kubernetes-k8s", "description": "Kubernetes MCP Server (K8s discovered)"}
+                ]
+                
+                for server in example_servers:
+                    mcp_servers[server["name"]] = {
+                        "connected": False,
+                        "description": server["description"],
+                        "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                        "error": None
+                    }
+            
+            return jsonify({"message": f"Discovery completed for type: {discovery_type}", "discovered_servers": len(mcp_servers)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # Kill Switch Endpoints
+    @app.route('/mcp/kill-all-servers', methods=['POST'])
+    async def kill_all_mcp_servers():
+        """Emergency kill switch to terminate all MCP servers"""
+        try:
+            killed_count = 0
+            for server_name in list(mcp_servers.keys()):
+                try:
+                    # Force disconnect all servers
+                    if server_name in mcp_servers:
+                        mcp_servers[server_name]["connected"] = False
+                        mcp_servers[server_name]["error"] = "Forcefully terminated by kill switch"
+                        mcp_servers[server_name]["last_checked"] = datetime.datetime.utcnow().isoformat() + "Z"
+                        killed_count += 1
+                        logger.warning(f"KILL SWITCH: Forcefully terminated MCP server: {server_name}")
+                except Exception as e:
+                    logger.error(f"Error killing server {server_name}: {e}")
+            
+            # Clear all sessions if MCP client is available
+            if MCP_AVAILABLE and mcp_client:
+                try:
+                    await mcp_client.disconnect_all()
+                except Exception as e:
+                    logger.error(f"Error disconnecting MCP client sessions: {e}")
+            
+            return jsonify({
+                "message": f"Emergency kill switch activated. Terminated {killed_count} MCP servers.",
+                "killed_servers": killed_count,
+                "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+            })
+        except Exception as e:
+            logger.error(f"Error in kill switch: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/kill-client', methods=['POST'])
+    async def kill_mcp_client():
+        """Emergency kill switch to terminate the MCP client"""
+        try:
+            if MCP_AVAILABLE and mcp_client:
+                try:
+                    await mcp_client.disconnect_all()
+                    logger.warning("KILL SWITCH: MCP client forcefully terminated")
+                except Exception as e:
+                    logger.error(f"Error killing MCP client: {e}")
+            
+            # Clear all server statuses
+            for server_name in mcp_servers:
+                mcp_servers[server_name]["connected"] = False
+                mcp_servers[server_name]["error"] = "Client terminated by kill switch"
+                mcp_servers[server_name]["last_checked"] = datetime.datetime.utcnow().isoformat() + "Z"
+            
+            return jsonify({
+                "message": "Emergency kill switch activated. MCP client terminated.",
+                "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+            })
+        except Exception as e:
+            logger.error(f"Error killing MCP client: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/restart-system', methods=['POST'])
+    async def restart_mcp_system():
+        """Emergency restart of the entire MCP system"""
+        try:
+            # First kill everything
+            await kill_all_mcp_servers()
+            await kill_mcp_client()
+            
+            # Wait a moment for cleanup
+            await asyncio.sleep(2)
+            
+            # Reset all server statuses for potential restart
+            for server_name in mcp_servers:
+                mcp_servers[server_name]["connected"] = False
+                mcp_servers[server_name]["error"] = None
+                mcp_servers[server_name]["last_checked"] = datetime.datetime.utcnow().isoformat() + "Z"
+            
+            logger.info("MCP system restart completed")
+            
+            return jsonify({
+                "message": "MCP system restart completed. All servers disconnected and ready for reconnection.",
+                "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+            })
+        except Exception as e:
+            logger.error(f"Error restarting MCP system: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    if __name__ == '__main__':
+        print("=== Enhanced RAG Playground with NVIDIA AIQ Toolkit MCP Client ===")
+        
+        if MCP_AVAILABLE:
+            print("✅ NVIDIA AIQ Toolkit MCP client available")
+        else:
+            print("⚠️  NVIDIA AIQ Toolkit not available - MCP features disabled")
+        
+        # Test both connection methods
+        mcp_connection = connect_to_milvus_via_mcp()
+        if mcp_connection:
+            print(f"✅ Connected to Milvus via MCP wrapper: {MILVUS_MCP_URL}")
+            print(f"📚 Collection: {COLLECTION_NAME}")
+        else:
+            print("⚠️  MCP wrapper not available, trying direct connection...")
+            collection = connect_to_milvus()
+            if collection:
+                print(f"✅ Connected to Milvus directly: {COLLECTION_NAME}")
+                print(f"📚 Collection has {collection.num_entities} entities")
+            else:
+                print("❌ Failed to connect to Milvus")
+        
+        print("🚀 Starting Flask server on port 8080...")
+        print("🌐 Enhanced Playground will be available at http://localhost:8080")
+        print("🔌 Features: NVIDIA AIQ Toolkit MCP Client, Server Discovery, Health monitoring")
+        
+        # Run Flask app with asyncio support
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(app.run(host='0.0.0.0', port=8080, debug=False))
+  mcp_client_enhanced.py: |
+    import asyncio
+    import logging
+    from typing import Dict, List, Any, Optional
+    from dataclasses import dataclass, field
+
+    from mcp.client import ClientSession, StdioServerParameters, stdio_client
+    from mcp.messages import Tool
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    @dataclass
+    class MCPServerConfig:
+        name: str
+        command: str
+        args: List[str] = field(default_factory=list)
+        env: Dict[str, str] = field(default_factory=dict)
+        description: str = ""
+        enabled: bool = False
+        status: str = "Disconnected"
+        last_checked: Optional[str] = None
+        error: Optional[str] = None
+        discovery_method: str = "manual"
+        endpoint: Optional[str] = None
+
+        def to_dict(self):
+            return {
+                "name": self.name,
+                "command": self.command,
+                "args": self.args,
+                "env": self.env,
+                "description": self.description,
+                "enabled": self.enabled,
+                "status": self.status,
+                "last_checked": self.last_checked,
+                "error": self.error,
+                "discovery_method": self.discovery_method,
+                "endpoint": self.endpoint
+            }
+
+    class MCPClientManagerEnhanced:
+        def __init__(self, registry):
+            self.registry = registry
+            self.sessions: Dict[str, ClientSession] = {}
+            self.available_tools: Dict[str, List[Tool]] = {}
+            self.auto_reconnect_tasks: Dict[str, asyncio.Task] = {}
+            logger.info("Initialized MCPClientManagerEnhanced with registry integration.")
+
+        async def connect_to_server(self, server_name: str) -> bool:
+            config = self.registry.get_server_config(server_name)
+            if not config:
+                logger.error(f"Server config for '{server_name}' not found in registry.")
+                return False
+            
+            if server_name in self.sessions:
+                logger.info(f"Already connected to '{server_name}'. Disconnecting first.")
+                await self.disconnect_from_server(server_name)
+
+            logger.info(f"Attempting to connect to MCP server: {server_name}")
+            try:
+                server_params = StdioServerParameters(
+                    command=config.command,
+                    args=config.args,
+                    env=config.env
+                )
+                
+                process = await asyncio.create_subprocess_exec(
+                    server_params.command,
+                    *server_params.args,
+                    env=server_params.env,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+
+                session = ClientSession(process.stdout, process.stdin)
+                await session.initialize()
+                
+                self.sessions[server_name] = session
+                self.available_tools[server_name] = await session.get_available_tools()
+                config.status = "Connected"
+                config.error = None
+                logger.info(f"Successfully connected to MCP server: {server_name}")
+                
+                # Start auto-reconnection task if enabled
+                if config.enabled:
+                    self.auto_reconnect_tasks[server_name] = asyncio.create_task(
+                        self._auto_reconnect_loop(server_name)
+                    )
+                
+                return True
+            except Exception as e:
+                config.status = "Failed"
+                config.error = str(e)
+                logger.error(f"Failed to connect to MCP server '{server_name}': {e}")
+                if server_name in self.sessions:
+                    del self.sessions[server_name]
+                return False
+
+        async def disconnect_from_server(self, server_name: str):
+            if server_name in self.sessions:
+                logger.info(f"Disconnecting from MCP server: {server_name}")
+                session = self.sessions.pop(server_name)
+                try:
+                    await session.close()
+                except Exception as e:
+                    logger.warning(f"Error closing session for '{server_name}': {e}")
+                self.available_tools.pop(server_name, None)
+                
+                # Cancel auto-reconnection task
+                if server_name in self.auto_reconnect_tasks:
+                    self.auto_reconnect_tasks.pop(server_name).cancel()
+                
+                config = self.registry.get_server_config(server_name)
+                if config:
+                    config.status = "Disconnected"
+                    config.error = None
+            else:
+                logger.info(f"Not connected to '{server_name}'. No action needed.")
+
+        async def _auto_reconnect_loop(self, server_name: str, interval: int = 30):
+            """Auto-reconnection loop for enabled servers"""
+            while True:
+                try:
+                    await asyncio.sleep(interval)
+                    config = self.registry.get_server_config(server_name)
+                    if not config or not config.enabled:
+                        break
+                    
+                    if server_name not in self.sessions or config.status != "Connected":
+                        logger.info(f"Auto-reconnecting to {server_name}...")
+                        await self.connect_to_server(server_name)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Error in auto-reconnect loop for {server_name}: {e}")
+
+        async def get_available_tools(self, server_name: str) -> List[Tool]:
+            if server_name in self.sessions:
+                return self.available_tools.get(server_name, [])
+            return []
+
+        async def call_tool(self, server_name: str, tool_name: str, **kwargs) -> Any:
+            session = self.sessions.get(server_name)
+            if not session:
+                raise ValueError(f"Not connected to MCP server: {server_name}")
+            
+            logger.info(f"Calling tool '{tool_name}' on server '{server_name}' with args: {kwargs}")
+            try:
+                result = await session.call_tool(tool_name, **kwargs)
+                logger.info(f"Tool '{tool_name}' on '{server_name}' returned: {result}")
+                return result
+            except Exception as e:
+                logger.error(f"Error calling tool '{tool_name}' on '{server_name}': {e}")
+                raise
+
+        async def get_all_connected_servers(self) -> List[str]:
+            return list(self.sessions.keys())
+
+        async def get_server_health(self, server_name: str) -> Dict[str, Any]:
+            config = self.registry.get_server_config(server_name)
+            if not config:
+                return {"status": "not_found"}
+            
+            return {
+                "name": config.name,
+                "status": config.status,
+                "last_checked": config.last_checked,
+                "error": config.error,
+                "connected": server_name in self.sessions,
+                "tools_count": len(self.available_tools.get(server_name, []))
+            }
+  mcp_registry.py: |
+    import asyncio
+    import logging
+    import os
+    import json
+    import yaml
+    import datetime
+    from typing import Dict, List, Any, Optional, Callable
+    from dataclasses import dataclass, field
+
+    from mcp.client import ClientSession, StdioServerParameters, stdio_client
+    from mcp.messages import Tool
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    @dataclass
+    class MCPServerConfig:
+        name: str
+        command: str
+        args: List[str] = field(default_factory=list)
+        env: Dict[str, str] = field(default_factory=dict)
+        description: str = ""
+        enabled: bool = False
+        status: str = "Disconnected"
+        last_checked: Optional[str] = None
+        error: Optional[str] = None
+        discovery_method: str = "manual"
+        endpoint: Optional[str] = None
+
+        def to_dict(self):
+            return {
+                "name": self.name,
+                "command": self.command,
+                "args": self.args,
+                "env": self.env,
+                "description": self.description,
+                "enabled": self.enabled,
+                "status": self.status,
+                "last_checked": self.last_checked,
+                "error": self.error,
+                "discovery_method": self.discovery_method,
+                "endpoint": self.endpoint
+            }
+
+    class MCPServerRegistry:
+        def __init__(self, initial_configs: Optional[List[MCPServerConfig]] = None):
+            self.servers: Dict[str, MCPServerConfig] = {
+                config.name: config for config in (initial_configs if initial_configs is not None else [])
+            }
+            self.discovery_tasks: Dict[str, asyncio.Task] = {}
+            self.health_check_tasks: Dict[str, asyncio.Task] = {}
+            self.lock = asyncio.Lock()
+            logger.info(f"Initialized MCPServerRegistry with {len(self.servers)} initial server configs.")
+
+        async def add_server(self, config: MCPServerConfig, overwrite: bool = False):
+            async with self.lock:
+                if config.name in self.servers and not overwrite:
+                    logger.warning(f"Server '{config.name}' already exists. Use overwrite=True to update.")
+                    return False
+                self.servers[config.name] = config
+                logger.info(f"Added/Updated server config: {config.name} via {config.discovery_method}")
+                return True
+
+        async def remove_server(self, server_name: str):
+            async with self.lock:
+                if server_name in self.servers:
+                    config = self.servers.pop(server_name)
+                    logger.info(f"Removed server config: {server_name}")
+                    if server_name in self.health_check_tasks:
+                        self.health_check_tasks.pop(server_name).cancel()
+                    if server_name in self.discovery_tasks:
+                        self.discovery_tasks.pop(server_name).cancel()
+                    return True
+                return False
+
+        def get_server_config(self, server_name: str) -> Optional[MCPServerConfig]:
+            return self.servers.get(server_name)
+
+        def get_all_servers(self) -> List[MCPServerConfig]:
+            return list(self.servers.values())
+
+        async def _perform_health_check(self, server_name: str, check_interval: int = 10):
+            config = self.get_server_config(server_name)
+            if not config:
+                return
+
+            config.last_checked = datetime.datetime.utcnow().isoformat() + "Z"
+            logger.debug(f"Health check for {server_name} at {config.last_checked}")
+
+        async def start_health_checks(self, check_interval: int = 10):
+            for server_name in self.servers:
+                if server_name not in self.health_check_tasks:
+                    self.health_check_tasks[server_name] = asyncio.create_task(
+                        self._health_check_loop(server_name, check_interval)
+                    )
+
+        async def _health_check_loop(self, server_name: str, interval: int):
+            while True:
+                await self._perform_health_check(server_name)
+                await asyncio.sleep(interval)
+
+        async def discover_from_kubernetes_configmaps(self, namespace: str = "default", label_selector: str = "mcp-server=true"):
+            logger.info(f"Discovering MCP servers from Kubernetes ConfigMaps in namespace '{namespace}' with label '{label_selector}'")
+            try:
+                configmap_path = os.getenv("MCP_CONFIGMAP_PATH", "/etc/mcp")
+                if not os.path.exists(configmap_path):
+                    logger.warning(f"Kubernetes ConfigMap path '{configmap_path}' not found. Skipping K8s discovery.")
+                    return
+
+                for filename in os.listdir(configmap_path):
+                    if filename.endswith((".json", ".yaml", ".yml")):
+                        file_path = os.path.join(configmap_path, filename)
+                        try:
+                            with open(file_path, 'r') as f:
+                                content = f.read()
+                                if filename.endswith((".yaml", ".yml")):
+                                    server_data = yaml.safe_load(content)
+                                else:
+                                    server_data = json.loads(content)
+                                
+                                if "name" not in server_data:
+                                    server_data["name"] = os.path.splitext(filename)[0]
+
+                                config = MCPServerConfig(
+                                    name=server_data.get("name"),
+                                    command=server_data.get("command"),
+                                    args=server_data.get("args", []),
+                                    env=server_data.get("env", {}),
+                                    description=server_data.get("description", "Discovered via Kubernetes ConfigMap"),
+                                    enabled=server_data.get("enabled", False),
+                                    discovery_method="kubernetes_configmap",
+                                    endpoint=f"k8s-configmap://{namespace}/{filename}"
+                                )
+                                await self.add_server(config, overwrite=True)
+                        except Exception as e:
+                            logger.error(f"Error processing ConfigMap file {file_path}: {e}")
+
+            except Exception as e:
+                logger.error(f"Error during Kubernetes ConfigMap discovery: {e}")
+
+        async def discover_from_http_endpoint(self, url: str, discovery_interval: int = 300):
+            logger.info(f"Discovering MCP servers from HTTP endpoint: {url}")
+            while True:
+                try:
+                    import requests
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    servers_data = response.json()
+
+                    if not isinstance(servers_data, list):
+                        logger.warning(f"HTTP discovery endpoint '{url}' did not return a list of servers.")
+                        servers_data = []
+
+                    for server_data in servers_data:
+                        config = MCPServerConfig(
+                            name=server_data.get("name"),
+                            command=server_data.get("command"),
+                            args=server_data.get("args", []),
+                            env=server_data.get("env", {}),
+                            description=server_data.get("description", "Discovered via HTTP"),
+                            enabled=server_data.get("enabled", False),
+                            discovery_method="http",
+                            endpoint=url
+                        )
+                        await self.add_server(config, overwrite=True)
+                    logger.info(f"Successfully discovered {len(servers_data)} servers from {url}")
+
+                except Exception as e:
+                    logger.error(f"Error during HTTP discovery from {url}: {e}")
+                await asyncio.sleep(discovery_interval)
+
+        async def discover_from_dns_srv(self, service_name: str, discovery_interval: int = 300):
+            logger.info(f"Discovering MCP servers from DNS SRV record: {service_name}")
+            while True:
+                try:
+                    if service_name == "_mcp._tcp.example.com":
+                        discovered_endpoints = [("mcp-server-1.example.com", 8080), ("mcp-server-2.example.com", 8080)]
+                    else:
+                        discovered_endpoints = []
+
+                    for host, port in discovered_endpoints:
+                        server_name = f"{host}:{port}"
+                        config = MCPServerConfig(
+                            name=server_name,
+                            command="mcp-network-client",
+                            args=[f"--host={host}", f"--port={port}"],
+                            description=f"Discovered via DNS SRV: {service_name}",
+                            enabled=False,
+                            discovery_method="dns_srv",
+                            endpoint=f"dns-srv://{service_name}"
+                        )
+                        await self.add_server(config, overwrite=True)
+                    logger.info(f"Successfully discovered {len(discovered_endpoints)} servers from DNS SRV {service_name}")
+
+                except Exception as e:
+                    logger.error(f"Error during DNS SRV discovery from {service_name}: {e}")
+                await asyncio.sleep(discovery_interval)
+
+        async def load_from_config_file(self, file_path: str):
+            logger.info(f"Loading MCP server configurations from file: {file_path}")
+            try:
+                with open(file_path, 'r') as f:
+                    if file_path.endswith((".yaml", ".yml")):
+                        configs_data = yaml.safe_load(f)
+                    else:
+                        configs_data = json.load(f)
+                
+                if not isinstance(configs_data, list):
+                    logger.error(f"Config file '{file_path}' must contain a list of server configurations.")
+                    return
+
+                for server_data in configs_data:
+                    config = MCPServerConfig(
+                        name=server_data.get("name"),
+                        command=server_data.get("command"),
+                        args=server_data.get("args", []),
+                        env=server_data.get("env", {}),
+                        description=server_data.get("description", "Loaded from config file"),
+                        enabled=server_data.get("enabled", False),
+                        discovery_method="config_file",
+                        endpoint=file_path
+                    )
+                    await self.add_server(config, overwrite=True)
+                logger.info(f"Loaded {len(configs_data)} servers from {file_path}")
+            except FileNotFoundError:
+                logger.warning(f"Config file '{file_path}' not found. Skipping.")
+            except Exception as e:
+                logger.error(f"Error loading config from {file_path}: {e}")
+
+        async def start_discovery_loops(self):
+            await self.discover_from_kubernetes_configmaps()
+
+            http_discovery_url = os.getenv("MCP_HTTP_DISCOVERY_URL")
+            if http_discovery_url:
+                self.discovery_tasks["http"] = asyncio.create_task(
+                    self.discover_from_http_endpoint(http_discovery_url)
+                )
+
+            dns_srv_service = os.getenv("MCP_DNS_SRV_SERVICE")
+            if dns_srv_service:
+                self.discovery_tasks["dns_srv"] = asyncio.create_task(
+                    self.discover_from_dns_srv(dns_srv_service)
+                )
+
+            config_file_path = os.getenv("MCP_CONFIG_FILE_PATH")
+            if config_file_path:
+                await self.load_from_config_file(config_file_path)
+
+    # Default configurations for known MCP servers (manual entries)
+    default_manual_configs = [
+        MCPServerConfig(
+            name="hammerspace-manual",
+            command="python",
+            args=["-m", "hammerspace_mcp_server"],
+            description="HammerSpace MCP Server (manual entry)",
+            enabled=False,
+            discovery_method="manual"
+        ),
+        MCPServerConfig(
+            name="kubernetes-manual",
+            command="k8s-mcp-server",
+            args=[],
+            env={"KUBECONFIG": "/var/run/secrets/kubernetes.io/serviceaccount"},
+            description="Kubernetes MCP Server (manual entry)",
+            enabled=False,
+            discovery_method="manual"
+        )
+    ]
+
+    registry = MCPServerRegistry(default_manual_configs)

@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-pdf-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: pdf-test
+        image: python:3.11
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "=== CREATING AND INGESTING TEST PDF ==="
+          echo ""
+          echo "Installing required packages..."
+          pip install pymilvus requests reportlab
+          echo ""
+          echo "Creating test PDF..."
+          python3 -c "
+          from reportlab.pdfgen import canvas
+          from reportlab.lib.pagesizes import letter
+          
+          c = canvas.Canvas('test.pdf', pagesize=letter)
+          c.drawString(100, 750, 'Test Document for RAG Ingestion')
+          c.drawString(100, 700, 'This is a test document created for testing the NVIDIA RAG Blueprint system.')
+          c.drawString(100, 650, 'It contains information about vector databases, embeddings, and retrieval-augmented generation.')
+          c.drawString(100, 600, 'The document is designed to test the PDF ingestion pipeline.')
+          c.drawString(100, 550, 'This should be processed and stored in the Milvus vector database.')
+          c.save()
+          print('Test PDF created successfully')
+          "
+          echo ""
+          echo "Testing Milvus connection..."
+          python3 -c "
+          from pymilvus import connections, Collection, utility
+          
+          try:
+              connections.connect('default', host='10.233.53.224', port='19530')
+              print('✅ Connected to Milvus successfully')
+              
+              # List existing collections
+              collections = utility.list_collections()
+              print(f'Existing collections: {collections}')
+              
+              # Create test collection if it doesn't exist
+              if 'test_collection' not in collections:
+                  print('Creating test_collection...')
+                  from pymilvus import CollectionSchema, FieldSchema, DataType
+                  
+                  fields = [
+                      FieldSchema(name='id', dtype=DataType.INT64, is_primary=True, auto_id=True),
+                      FieldSchema(name='text', dtype=DataType.VARCHAR, max_length=65535),
+                      FieldSchema(name='embedding', dtype=DataType.FLOAT_VECTOR, dim=1024)
+                  ]
+                  schema = CollectionSchema(fields, 'Test collection for RAG')
+                  collection = Collection('test_collection', schema)
+                  print('✅ Test collection created')
+              else:
+                  print('✅ Test collection already exists')
+                  
+          except Exception as e:
+              print(f'❌ Milvus connection failed: {e}')
+          "
+          echo ""
+          echo "=== TEST COMPLETE ==="
+      restartPolicy: Never

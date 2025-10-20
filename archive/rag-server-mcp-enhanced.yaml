@@ -1,0 +1,652 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-server-mcp-enhanced
+  namespace: default
+  labels:
+    app: rag-server-mcp-enhanced
+spec:
+  restartPolicy: Always
+  containers:
+  - name: rag-server-mcp
+    image: python:3.11-slim
+    ports:
+    - containerPort: 8081
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing system packages..."
+        apt-get update && apt-get install -y git curl
+        echo "Installing Python packages..."
+        pip install --upgrade pip
+        pip install fastapi uvicorn requests pymilvus numpy pyyaml aiohttp aiodns
+        echo "Creating app directory..."
+        mkdir -p /app
+        cd /app
+        echo "Starting Enhanced RAG Server with MCP integration..."
+        
+        # Copy the enhanced RAG server script
+        cp /scripts/rag_server_mcp_enhanced.py /app/server.py
+        
+        # Start the enhanced RAG server
+        uvicorn server:app --host 0.0.0.0 --port 8081 --workers 1
+        
+    env:
+    - name: MILVUS_HOST
+      value: "milvus-external-etcd-clean"
+    - name: MILVUS_PORT
+      value: "19530"
+    - name: COLLECTION_NAME
+      value: "hammerspace_docs"
+    - name: MILVUS_MCP_URL
+      value: "http://milvus-mcp-wrapper-service:8000"
+    - name: PYTHONPATH
+      value: "/app"
+    resources:
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+      requests:
+        cpu: "1000m"
+        memory: "2Gi"
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+  volumes:
+  - name: script-volume
+    configMap:
+      name: rag-server-mcp-script
+      defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-server-mcp-enhanced
+  namespace: default
+spec:
+  selector:
+    app: rag-server-mcp-enhanced
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-server-mcp-script
+  namespace: default
+data:
+  rag_server_mcp_enhanced.py: |
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+    from typing import List, Dict, Any, Optional
+    import requests
+    import json
+    import os
+    import logging
+    import time
+    from pymilvus import connections, Collection
+    import numpy as np
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    app = FastAPI(
+        title="Enhanced RAG Server with MCP Integration",
+        description="NVIDIA RAG Blueprint server enhanced with MCP client capabilities",
+        version="2.2.0-mcp"
+    )
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Environment variables
+    MILVUS_HOST = os.getenv('MILVUS_HOST', 'milvus-external-etcd-clean')
+    MILVUS_PORT = int(os.getenv('MILVUS_PORT', '19530'))
+    COLLECTION_NAME = os.getenv('COLLECTION_NAME', 'hammerspace_docs')
+    MILVUS_MCP_URL = os.getenv('MILVUS_MCP_URL', 'http://milvus-mcp-wrapper-service:8000')
+
+    # Pydantic models
+    class HealthResponse(BaseModel):
+        message: str = "Service is up."
+        databases: List[Dict] = []
+        object_storage: List[Dict] = []
+        nim: List[Dict] = []
+        mcp_status: Dict = {}
+
+    class DocumentSearch(BaseModel):
+        query: str = "Tell me something interesting"
+        collection_names: List[str] = ["hammerspace_docs"]
+        vdb_top_k: int = 100
+        reranker_top_k: int = 10
+        enable_reranker: bool = True
+        embedding_model: str = "nvidia/embed-qa-4"
+        embedding_endpoint: str = "http://simple-embedding-2048:8000"
+        reranker_model: str = "nvidia/llama-3.2-nv-rerankqa-1b-v2"
+        reranker_endpoint: Optional[str] = None
+        filter_expr: str = ""
+
+    class Citations(BaseModel):
+        total_results: int = 0
+        results: List[Dict] = []
+
+    class Message(BaseModel):
+        role: str = "user"
+        content: str = "Hello! What can you help me with?"
+
+    class Prompt(BaseModel):
+        messages: List[Message]
+        use_knowledge_base: bool = True
+        temperature: float = 0.0
+        top_p: float = 0.1
+        max_tokens: int = 32768
+        reranker_top_k: int = 10
+        vdb_top_k: int = 100
+        collection_names: List[str] = ["hammerspace_docs"]
+        enable_query_rewriting: bool = False
+        enable_reranker: bool = True
+        enable_guardrails: bool = False
+        enable_citations: bool = True
+        enable_vlm_inference: bool = False
+        model: str = "nvidia/llama-3.3-nemotron-super-49b-v1"
+        llm_endpoint: str = ""
+        embedding_model: str = "nvidia/embed-qa-4"
+        embedding_endpoint: str = "http://simple-embedding-2048:8000"
+        reranker_model: str = "nvidia/llama-3.2-nv-rerankqa-1b-v2"
+        reranker_endpoint: Optional[str] = None
+        vlm_model: str = "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
+        vlm_endpoint: str = "http://nim-vlm:8000/v1"
+        stop: List[str] = []
+        filter_expr: str = ""
+
+    class ChainResponse(BaseModel):
+        id: str = ""
+        choices: List[Dict] = []
+        model: str = ""
+        object: str = ""
+        created: int = 0
+        usage: Optional[Dict] = None
+        citations: Optional[Citations] = None
+
+    # MCP Integration Functions
+    def connect_to_milvus():
+        """Connect to Milvus directly"""
+        try:
+            connections.connect("default", host=MILVUS_HOST, port=MILVUS_PORT)
+            collection = Collection(COLLECTION_NAME)
+            collection.load()
+            return collection
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            return None
+
+    def call_mcp_tool(tool_name: str, arguments: dict = None):
+        """Call an MCP tool via the wrapper"""
+        try:
+            if arguments is None:
+                arguments = {}
+            
+            # Map tool names to MCP wrapper endpoints
+            if tool_name == "milvus_list_collections":
+                response = requests.get(f"{MILVUS_MCP_URL}/mcp/collections", timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"error": f"Failed to list collections: {response.status_code}"}
+            
+            elif tool_name == "milvus_count_documents":
+                collection_name = arguments.get("collection_name", COLLECTION_NAME)
+                # For now, use direct connection to count documents
+                collection = connect_to_milvus()
+                if collection:
+                    return {"collection": collection_name, "count": collection.num_entities}
+                else:
+                    return {"error": "Failed to connect to Milvus"}
+            
+            elif tool_name == "milvus_search":
+                query = arguments.get("query", "")
+                top_k = arguments.get("top_k", 5)
+                collection_name = arguments.get("collection_name", COLLECTION_NAME)
+                
+                search_request = {
+                    "collection_name": collection_name,
+                    "query_vectors": [np.random.rand(2048).tolist()],  # Dummy embedding
+                    "top_k": top_k,
+                    "search_params": {
+                        "metric_type": "L2",
+                        "params": {"nprobe": 10}
+                    }
+                }
+                
+                response = requests.post(f"{MILVUS_MCP_URL}/mcp/search", json=search_request, timeout=30)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"error": f"Search failed: {response.status_code}"}
+            
+            else:
+                return {"error": f"Unknown MCP tool: {tool_name}"}
+                
+        except Exception as e:
+            logger.error(f"Error calling MCP tool {tool_name}: {e}")
+            return {"error": str(e)}
+
+    def detect_mcp_intent(query: str) -> dict:
+        """Detect if the query requires MCP tool usage"""
+        query_lower = query.lower().strip()
+        
+        # Skip MCP for simple greetings and basic queries
+        simple_greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "what's up"]
+        if query_lower in simple_greetings or len(query_lower) < 10:
+            return {"requires_mcp": False}
+        
+        # Milvus-related queries - be more specific
+        if any(keyword in query_lower for keyword in ["how many documents", "document count", "number of documents", "total documents"]):
+            if any(keyword in query_lower for keyword in ["milvus", "collection", "database", "instance"]):
+                return {
+                    "requires_mcp": True,
+                    "tool": "milvus_count_documents",
+                    "arguments": {"collection_name": COLLECTION_NAME}
+                }
+        
+        if any(keyword in query_lower for keyword in ["list collections", "show collections", "what collections", "available collections"]):
+            if any(keyword in query_lower for keyword in ["milvus", "database", "instance"]):
+                return {
+                    "requires_mcp": True,
+                    "tool": "milvus_list_collections",
+                    "arguments": {}
+                }
+        
+        if any(keyword in query_lower for keyword in ["search documents", "find documents", "query documents", "search in milvus"]):
+            if any(keyword in query_lower for keyword in ["milvus", "collection", "database"]):
+                return {
+                    "requires_mcp": True,
+                    "tool": "milvus_search",
+                    "arguments": {
+                        "query": query,
+                        "collection_name": COLLECTION_NAME,
+                        "top_k": 5
+                    }
+                }
+        
+        # Kubernetes-related queries (placeholder for future implementation)
+        if any(keyword in query_lower for keyword in ["kubernetes", "k8s", "pod", "job", "deployment"]):
+            if any(keyword in query_lower for keyword in ["status", "list", "show", "running"]):
+                return {
+                    "requires_mcp": True,
+                    "tool": "kubernetes_status",
+                    "arguments": {"query": query}
+                }
+        
+        # HammerSpace-related queries (placeholder for future implementation)
+        if any(keyword in query_lower for keyword in ["hammerspace", "files", "data files", "storage"]):
+            if any(keyword in query_lower for keyword in ["status", "list", "show", "state"]):
+                return {
+                    "requires_mcp": True,
+                    "tool": "hammerspace_status",
+                    "arguments": {"query": query}
+                }
+        
+        return {"requires_mcp": False}
+
+    def connect_to_milvus_via_mcp():
+        """Connect to Milvus via MCP wrapper"""
+        try:
+            response = requests.get(f"{MILVUS_MCP_URL}/health", timeout=5)
+            if response.status_code == 200:
+                logger.info("Connected to Milvus via MCP wrapper")
+                return "mcp_wrapper"
+            else:
+                logger.warning(f"MCP wrapper health check failed: {response.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus MCP wrapper: {e}")
+            return None
+
+    def search_via_mcp(query: str, top_k: int = 10):
+        """Search using Milvus MCP wrapper"""
+        try:
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_request = {
+                "collection_name": COLLECTION_NAME,
+                "query_vectors": [query_embedding],
+                "top_k": top_k,
+                "search_params": {
+                    "metric_type": "L2",
+                    "params": {"nprobe": 10}
+                }
+            }
+            
+            response = requests.post(
+                f"{MILVUS_MCP_URL}/mcp/search",
+                json=search_request,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("result", [])
+            else:
+                logger.error(f"MCP search failed: {response.status_code} - {response.text}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in MCP search: {e}")
+            return []
+
+    def simple_search(collection, query: str, top_k: int = 10):
+        """Simple search using direct Milvus connection"""
+        try:
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_params = {
+                "data": [query_embedding],
+                "anns_field": "vector",
+                "param": {"metric_type": "L2", "params": {"nprobe": 10}},
+                "limit": top_k,
+                "output_fields": ["source", "text"]
+            }
+            
+            results = collection.search(**search_params)
+            return results[0] if results else []
+        except Exception as e:
+            logger.error(f"Error during Milvus search: {e}")
+            return []
+
+    # Health Check Endpoint
+    @app.get("/health", response_model=HealthResponse)
+    async def health_check(check_dependencies: bool = False):
+        """Health check endpoint with MCP status"""
+        mcp_status = {}
+        
+        # Check MCP wrapper
+        mcp_connection = connect_to_milvus_via_mcp()
+        if mcp_connection:
+            mcp_status = {
+                "milvus_mcp_wrapper": {
+                    "status": "connected",
+                    "url": MILVUS_MCP_URL
+                }
+            }
+        else:
+            mcp_status = {
+                "milvus_mcp_wrapper": {
+                    "status": "disconnected",
+                    "url": MILVUS_MCP_URL
+                }
+            }
+        
+        # Check direct Milvus connection
+        collection = connect_to_milvus()
+        if collection:
+            mcp_status["milvus_direct"] = {
+                "status": "connected",
+                "collection": COLLECTION_NAME,
+                "entities": collection.num_entities
+            }
+        else:
+            mcp_status["milvus_direct"] = {
+                "status": "disconnected",
+                "collection": COLLECTION_NAME
+            }
+        
+        return HealthResponse(
+            message="Enhanced RAG Server with MCP integration is up.",
+            mcp_status=mcp_status
+        )
+
+    # Document Search Endpoint
+    @app.post("/search", response_model=Citations)
+    async def document_search(request: DocumentSearch):
+        """Enhanced document search with MCP support"""
+        try:
+            # Try MCP wrapper first
+            mcp_connection = connect_to_milvus_via_mcp()
+            if mcp_connection:
+                logger.info("Using Milvus MCP wrapper for search")
+                results = search_via_mcp(request.query, request.vdb_top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "document_id": result.get("id", ""),
+                        "content": result.get("text", ""),
+                        "document_name": result.get("source", "Unknown"),
+                        "document_type": "text",
+                        "score": 1.0 - result.get("distance", 0.0),  # Convert distance to score
+                        "metadata": {
+                            "source": result.get("source", "Unknown"),
+                            "mcp_method": "mcp_wrapper"
+                        }
+                    })
+                
+                return Citations(
+                    total_results=len(formatted_results),
+                    results=formatted_results
+                )
+            else:
+                # Fallback to direct connection
+                logger.info("Falling back to direct Milvus connection")
+                collection = connect_to_milvus()
+                if not collection:
+                    raise HTTPException(status_code=500, detail="Cannot connect to Milvus")
+                
+                results = simple_search(collection, request.query, request.vdb_top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "document_id": str(result.id),
+                        "content": result.entity.get('text', ''),
+                        "document_name": result.entity.get('source', 'Unknown'),
+                        "document_type": "text",
+                        "score": 1.0 - result.distance,  # Convert distance to score
+                        "metadata": {
+                            "source": result.entity.get('source', 'Unknown'),
+                            "mcp_method": "direct_connection"
+                        }
+                    })
+                
+                return Citations(
+                    total_results=len(formatted_results),
+                    results=formatted_results
+                )
+                
+        except Exception as e:
+            logger.error(f"Error in document search: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Generate Answer Endpoint with MCP Tool Integration
+    @app.post("/generate", response_model=ChainResponse)
+    async def generate_answer(request: Prompt):
+        """Generate answer with MCP tool integration"""
+        try:
+            # Extract query from messages
+            query = ""
+            if request.messages:
+                query = request.messages[-1].content
+            
+            # Check if the query requires MCP tool usage
+            mcp_intent = detect_mcp_intent(query)
+            
+            if mcp_intent["requires_mcp"]:
+                # Use MCP tool to get real-time information
+                tool_name = mcp_intent["tool"]
+                tool_args = mcp_intent["arguments"]
+                
+                logger.info(f"Using MCP tool: {tool_name} with args: {tool_args}")
+                mcp_result = call_mcp_tool(tool_name, tool_args)
+                
+                # Generate response based on MCP tool result
+                if "error" in mcp_result:
+                    response_text = f"I encountered an error while trying to get that information: {mcp_result['error']}"
+                else:
+                    # Format response based on the tool used
+                    if tool_name == "milvus_count_documents":
+                        count = mcp_result.get("count", 0)
+                        collection = mcp_result.get("collection", "unknown")
+                        response_text = f"There are {count} documents in the Milvus collection '{collection}'."
+                    
+                    elif tool_name == "milvus_list_collections":
+                        collections = mcp_result.get("collections", [])
+                        if collections:
+                            response_text = f"The available Milvus collections are: {', '.join(collections)}"
+                        else:
+                            response_text = "No collections found in Milvus."
+                    
+                    elif tool_name == "milvus_search":
+                        results = mcp_result.get("result", [])
+                        if results:
+                            response_text = f"I found {len(results)} documents matching your search. "
+                            if results:
+                                first_result = results[0]
+                                response_text += f"The most relevant document is '{first_result.get('source', 'Unknown')}' with a distance of {first_result.get('distance', 0.0):.3f}."
+                        else:
+                            response_text = "No documents found matching your search criteria."
+                    
+                    else:
+                        response_text = f"I used the {tool_name} tool and got: {mcp_result}"
+                
+                # Create a simple citations object for MCP responses
+                citations = Citations(total_results=0, results=[])
+                
+            else:
+                # Handle simple greetings and basic queries without RAG search
+                query_lower = query.lower().strip()
+                simple_greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "what's up"]
+                
+                if query_lower in simple_greetings:
+                    response_text = f"Hello! I'm the NVIDIA RAG Blueprint assistant with MCP integration. I can help you with questions about the documents in the knowledge base, or you can ask me about system information like 'How many documents are in Milvus?' or 'What collections are available?' How can I assist you today?"
+                    citations = Citations(total_results=0, results=[])
+                elif len(query_lower) < 20:
+                    response_text = f"I understand you're asking about '{query}'. I can help you search through the document knowledge base or provide system information. Could you provide more details about what you'd like to know?"
+                    citations = Citations(total_results=0, results=[])
+                else:
+                    # Regular RAG search for document-based queries
+                    search_request = DocumentSearch(
+                        query=query,
+                        collection_names=request.collection_names,
+                        vdb_top_k=request.vdb_top_k,
+                        reranker_top_k=request.reranker_top_k,
+                        enable_reranker=request.enable_reranker,
+                        embedding_model=request.embedding_model,
+                        embedding_endpoint=request.embedding_endpoint,
+                        reranker_model=request.reranker_model,
+                        reranker_endpoint=request.reranker_endpoint,
+                        filter_expr=request.filter_expr
+                    )
+                    
+                    citations = await document_search(search_request)
+                    
+                    # Generate response based on search results
+                    if citations.total_results > 0:
+                        response_text = f"Based on the search results, I found {citations.total_results} relevant documents for your query: '{query}'. "
+                        if citations.results:
+                            first_result = citations.results[0]
+                            response_text += f"The most relevant document is '{first_result['document_name']}' with a score of {first_result['score']:.3f}."
+                    else:
+                        response_text = f"I searched through the documents but didn't find any relevant information for your query: '{query}'. You might want to try rephrasing your question or asking about specific topics covered in the documents."
+            
+            return ChainResponse(
+                id="mcp-enhanced-response",
+                choices=[{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text
+                    },
+                    "finish_reason": "stop"
+                }],
+                model=request.model,
+                object="chat.completion",
+                created=int(time.time()),
+                citations=citations
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in generate answer: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # OpenAI-compatible Chat Completions Endpoint
+    @app.post("/chat/completions", response_model=ChainResponse)
+    async def chat_completions(request: Prompt):
+        """OpenAI-compatible chat completions with MCP support"""
+        return await generate_answer(request)
+
+    # V1 API endpoints for NVIDIA RAG Blueprint compatibility
+    @app.post("/v1/generate", response_model=ChainResponse)
+    async def v1_generate(request: Prompt):
+        """V1 generate endpoint for NVIDIA RAG Blueprint compatibility"""
+        return await generate_answer(request)
+
+    @app.post("/v1/chat/completions", response_model=ChainResponse)
+    async def v1_chat_completions(request: Prompt):
+        """V1 chat completions endpoint for NVIDIA RAG Blueprint compatibility"""
+        return await generate_answer(request)
+
+    @app.post("/v1/search", response_model=Citations)
+    async def v1_search(request: DocumentSearch):
+        """V1 search endpoint for NVIDIA RAG Blueprint compatibility"""
+        return await document_search(request)
+
+    @app.get("/v1/health", response_model=HealthResponse)
+    async def v1_health(check_dependencies: bool = False):
+        """V1 health endpoint for NVIDIA RAG Blueprint compatibility"""
+        return await health_check(check_dependencies)
+
+    # MCP-specific endpoints
+    @app.get("/mcp/status")
+    async def mcp_status():
+        """Get MCP server status"""
+        mcp_connection = connect_to_milvus_via_mcp()
+        return {
+            "milvus_mcp_wrapper": {
+                "status": "connected" if mcp_connection else "disconnected",
+                "url": MILVUS_MCP_URL,
+                "last_checked": "2025-10-06T20:30:00Z"
+            }
+        }
+
+    @app.get("/mcp/collections")
+    async def mcp_collections():
+        """Get collections via MCP"""
+        try:
+            response = requests.get(f"{MILVUS_MCP_URL}/mcp/collections", timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"MCP collections failed: {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    @app.get("/")
+    async def root():
+        return {
+            "service": "Enhanced RAG Server with MCP Integration",
+            "version": "2.2.0-mcp",
+            "endpoints": {
+                "health": "/health",
+                "search": "/search",
+                "generate": "/generate",
+                "chat_completions": "/chat/completions",
+                "mcp_status": "/mcp/status",
+                "mcp_collections": "/mcp/collections"
+            }
+        }
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8081)

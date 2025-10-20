@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-playground-registry-enhanced
+  namespace: default
+  labels:
+    app: rag-playground-registry
+spec:
+  restartPolicy: Always
+  containers:
+  - name: playground-registry
+    image: python:3.9-slim
+    ports:
+    - containerPort: 8080
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing required packages..."
+        pip install -r /scripts/requirements-registry.txt
+        echo "Creating app directory..."
+        mkdir -p /app /etc/mcp
+        cd /app
+        echo "Starting Enhanced RAG Playground with MCP Registry..."
+        
+        # Copy the enhanced playground script
+        cp /scripts/rag-playground-registry-enhanced.py /app/playground.py
+        cp /scripts/mcp_client_enhanced.py /app/mcp_client_enhanced.py
+        cp /scripts/mcp_registry.py /app/mcp_registry.py
+        
+        # Start the enhanced playground
+        python /app/playground.py
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+    - name: mcp-config
+      mountPath: /etc/mcp
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    env:
+    - name: PYTHONPATH
+      value: "/app"
+    - name: MCP_LOG_LEVEL
+      value: "INFO"
+    - name: KUBECONFIG
+      value: "/var/run/secrets/kubernetes.io/serviceaccount"
+  volumes:
+  - name: script-volume
+    configMap:
+      name: rag-playground-registry-configmap
+      defaultMode: 0755
+  - name: mcp-config
+    configMap:
+      name: mcp-server-configs
+      defaultMode: 0755
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-registry-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mcp-registry-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets", "services", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mcp-registry-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mcp-registry-role
+subjects:
+- kind: ServiceAccount
+  name: mcp-registry-sa
+  namespace: default
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-registry-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: mcp-registry-sa
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-server-configs
+  namespace: default
+  labels:
+    mcp-server-config: "true"
+data:
+  servers.yaml: |
+    servers:
+      hammerspace:
+        command: python
+        args: ["-m", "hammerspace_mcp_server"]
+        env: {}
+        description: "HammerSpace MCP Server for tagging and objectives"
+        enabled: false
+        health_check_url: "http://hammerspace-mcp-server:8080/health"
+        health_check_interval: 30
+        auto_reconnect: true
+        max_retries: 3
+        retry_delay: 5
+        tags: ["hammerspace", "tagging", "objectives"]
+        metadata:
+          version: "1.0.0"
+          author: "HammerSpace"
+      
+      kubernetes:
+        command: k8s-mcp-server
+        args: []
+        env:
+          KUBECONFIG: "/var/run/secrets/kubernetes.io/serviceaccount"
+        description: "Kubernetes MCP Server for job management"
+        enabled: false
+        health_check_url: "http://k8s-mcp-server:8080/health"
+        health_check_interval: 30
+        auto_reconnect: true
+        max_retries: 3
+        retry_delay: 5
+        tags: ["kubernetes", "jobs", "pods"]
+        metadata:
+          version: "1.0.0"
+          author: "Alexei Led"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-playground-registry-service
+  namespace: default
+spec:
+  selector:
+    app: rag-playground-registry
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 32508
+    protocol: TCP
+  type: NodePort

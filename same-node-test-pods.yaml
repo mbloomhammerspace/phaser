@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-1
+  namespace: default
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251010-1127
+  containers:
+  - name: test
+    image: busybox
+    command: ['sh','-lc','sleep 300']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-2
+  namespace: default
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251010-1127
+  containers:
+  - name: test
+    image: busybox
+    command: ['sh','-lc','sleep 300']

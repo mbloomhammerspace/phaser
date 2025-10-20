@@ -1,0 +1,203 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-common-crawl-script
+  namespace: default
+data:
+  ingest_common_crawl.py: |
+    #!/usr/bin/env python3
+    import os
+    import glob
+    import requests
+    import time
+    from pathlib import Path
+    
+    INGESTOR_URL = "http://ingestor-server:8082"
+    COLLECTION_NAME = "common_crawl"
+    PDF_DIR = "/pdfs/pdfs"
+    BATCH_SIZE = 100
+    MAX_RETRIES = 3
+    
+    def create_collection():
+        """Create the Common Crawl collection"""
+        print(f"Creating collection: {COLLECTION_NAME}")
+        try:
+            response = requests.post(
+                f"{INGESTOR_URL}/collection",
+                json={"collection_name": COLLECTION_NAME}
+            )
+            if response.status_code in [200, 201]:
+                print(f"✅ Collection '{COLLECTION_NAME}' created successfully")
+            elif "already exists" in response.text.lower():
+                print(f"ℹ️  Collection '{COLLECTION_NAME}' already exists")
+            else:
+                print(f"⚠️  Collection creation response: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"❌ Error creating collection: {e}")
+    
+    def get_pdf_files():
+        """Get all PDF files from the directory"""
+        print(f"\nScanning for PDFs in {PDF_DIR}...")
+        pdf_files = glob.glob(f"{PDF_DIR}/*.pdf")
+        print(f"Found {len(pdf_files)} PDF files")
+        return sorted(pdf_files)
+    
+    def ingest_batch(pdf_files, batch_num, total_batches):
+        """Ingest a batch of PDF files"""
+        print(f"\n{'='*60}")
+        print(f"Batch {batch_num}/{total_batches} - Processing {len(pdf_files)} files")
+        print(f"{'='*60}")
+        
+        for retry in range(MAX_RETRIES):
+            try:
+                # Prepare the files for upload
+                files = []
+                for pdf_path in pdf_files:
+                    try:
+                        files.append(('files', (os.path.basename(pdf_path), open(pdf_path, 'rb'), 'application/pdf')))
+                    except Exception as e:
+                        print(f"  ⚠️  Could not open {pdf_path}: {e}")
+                
+                if not files:
+                    print("  ⚠️  No valid files in this batch")
+                    return True
+                
+                # Upload documents
+                start_time = time.time()
+                response = requests.post(
+                    f"{INGESTOR_URL}/documents",
+                    files=files,
+                    data={'collection_name': COLLECTION_NAME}
+                )
+                elapsed = time.time() - start_time
+                
+                # Close all file handles
+                for _, (_, f, _) in files:
+                    f.close()
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"  ✅ Success! Processed {len(pdf_files)} files in {elapsed:.1f}s")
+                    if 'num_documents' in result:
+                        print(f"     Documents in collection: {result.get('num_documents', 'unknown')}")
+                    return True
+                else:
+                    print(f"  ❌ Error {response.status_code}: {response.text[:200]}")
+                    if retry < MAX_RETRIES - 1:
+                        wait_time = 2 ** retry
+                        print(f"     Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    
+            except Exception as e:
+                print(f"  ❌ Exception: {e}")
+                if retry < MAX_RETRIES - 1:
+                    wait_time = 2 ** retry
+                    print(f"     Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+        
+        return False
+    
+    def main():
+        print("=" * 80)
+        print("COMMON CRAWL PDF INGESTION")
+        print("=" * 80)
+        
+        # Create collection
+        create_collection()
+        time.sleep(2)
+        
+        # Get all PDF files
+        pdf_files = get_pdf_files()
+        
+        if not pdf_files:
+            print("❌ No PDF files found!")
+            return
+        
+        # Split into batches
+        batches = [pdf_files[i:i+BATCH_SIZE] for i in range(0, len(pdf_files), BATCH_SIZE)]
+        total_batches = len(batches)
+        
+        print(f"\nProcessing {len(pdf_files)} files in {total_batches} batches of {BATCH_SIZE}")
+        print(f"Starting ingestion at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        success_count = 0
+        failure_count = 0
+        start_time = time.time()
+        
+        for i, batch in enumerate(batches, 1):
+            if ingest_batch(batch, i, total_batches):
+                success_count += len(batch)
+            else:
+                failure_count += len(batch)
+            
+            # Progress update
+            if i % 10 == 0 or i == total_batches:
+                elapsed = time.time() - start_time
+                rate = success_count / elapsed if elapsed > 0 else 0
+                remaining = len(pdf_files) - (success_count + failure_count)
+                eta = remaining / rate if rate > 0 else 0
+                
+                print(f"\n📊 Progress: {success_count}/{len(pdf_files)} files")
+                print(f"   Rate: {rate:.1f} files/sec")
+                print(f"   ETA: {eta/60:.1f} minutes")
+                print(f"   Failures: {failure_count}")
+        
+        # Final summary
+        total_time = time.time() - start_time
+        print(f"\n{'='*80}")
+        print("INGESTION COMPLETE")
+        print(f"{'='*80}")
+        print(f"✅ Successful: {success_count}/{len(pdf_files)} files")
+        print(f"❌ Failed: {failure_count}/{len(pdf_files)} files")
+        print(f"⏱️  Total time: {total_time/60:.1f} minutes")
+        print(f"📈 Average rate: {success_count/total_time:.1f} files/sec")
+        print(f"{'='*80}")
+    
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-common-crawl
+  namespace: default
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: ingest-common-crawl
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: ingestor
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install -q requests
+            python3 /scripts/ingest_common_crawl.py
+        volumeMounts:
+        - name: pdfs
+          mountPath: /pdfs
+          readOnly: true
+        - name: script
+          mountPath: /scripts
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+      volumes:
+      - name: pdfs
+        persistentVolumeClaim:
+          claimName: hammerspace-hub-pvc
+      - name: script
+        configMap:
+          name: ingest-common-crawl-script
+

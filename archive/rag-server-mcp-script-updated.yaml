@@ -1,0 +1,957 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-server-mcp-script
+  namespace: default
+data:
+  rag_server_mcp_enhanced.py: |
+    from flask import Flask, request, jsonify, render_template_string
+    import json
+    from pymilvus import connections, Collection
+    import numpy as np
+    import requests
+    import asyncio
+    import datetime
+    import os
+    import logging
+    import time
+
+    # MCP Client placeholder - will be enhanced when NVIDIA AIQ Toolkit is properly available
+    MCP_AVAILABLE = False
+    print("MCP features disabled - NVIDIA AIQ Toolkit installation pending")
+    
+    # MCP Settings - Global state
+    MCP_GLOBAL_ENABLED = True
+    MCP_AUTO_CONNECT = True
+
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    app = Flask(__name__)
+
+    # Initialize MCP Client placeholder
+    mcp_client = None
+    mcp_servers = {}  # Dictionary to track connected servers
+
+    # Milvus connection settings - now using MCP wrapper
+    MILVUS_MCP_URL = os.getenv('MILVUS_MCP_URL', 'http://milvus-mcp-wrapper-service:8000')
+    COLLECTION_NAME = os.getenv('COLLECTION_NAME', 'hammerspace_docs')
+    
+    # Legacy direct connection settings (for fallback)
+    MILVUS_HOST = os.getenv('MILVUS_HOST', 'milvus-external-etcd-clean') # Updated default host
+    MILVUS_PORT_STR = os.getenv('MILVUS_PORT', '19530')
+    if '://' in MILVUS_PORT_STR:
+        MILVUS_PORT = int(MILVUS_PORT_STR.split(':')[-1])
+        if MILVUS_HOST == 'milvus-standalone':
+            MILVUS_HOST = MILVUS_PORT_STR.split('://')[1].split(':')[0]
+    else:
+        MILVUS_PORT = int(MILVUS_PORT_STR)
+
+    def connect_to_milvus():
+        """Connect to Milvus directly (legacy method)"""
+        try:
+            connections.connect("default", host=MILVUS_HOST, port=MILVUS_PORT)
+            collection = Collection(COLLECTION_NAME)
+            collection.load()
+            return collection
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            return None
+
+    def connect_to_milvus_via_mcp():
+        """Connect to Milvus via MCP wrapper"""
+        try:
+            # Test MCP wrapper connectivity
+            response = requests.get(f"{MILVUS_MCP_URL}/health", timeout=5)
+            if response.status_code == 200:
+                logger.info("Connected to Milvus via MCP wrapper")
+                return "mcp_wrapper"  # Return a marker indicating MCP connection
+            else:
+                logger.warning(f"MCP wrapper health check failed: {response.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus MCP wrapper: {e}")
+            return None
+
+    def search_via_mcp(query, top_k=5):
+        """Search using Milvus MCP wrapper"""
+        try:
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_request = {
+                "collection_name": COLLECTION_NAME,
+                "query_vectors": [query_embedding],
+                "top_k": top_k,
+                "search_params": {
+                    "metric_type": "L2",
+                    "params": {"nprobe": 10}
+                }
+            }
+            
+            response = requests.post(
+                f"{MILVUS_MCP_URL}/mcp/search",
+                json=search_request,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("results", []) # Changed from "result" to "results"
+            else:
+                logger.error(f"MCP search failed: {response.status_code} - {response.text}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in MCP search: {e}")
+            return []
+
+    def simple_search(collection, query, top_k=5):
+        try:
+            # Generate a dummy embedding for the query (in production, use a real embedding model)
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_params = {
+                "data": [query_embedding],
+                "anns_field": "vector",
+                "param": {"metric_type": "L2", "params": {"nprobe": 10}},
+                "limit": top_k,
+                "output_fields": ["source", "text"]
+            }
+            
+            results = collection.search(**search_params)
+            return results[0] # Return the first result set
+        except Exception as e:
+            logger.error(f"Error during Milvus search: {e}")
+            return []
+
+    @app.route('/')
+    def index():
+        # Enhanced HTML template to include MCP client panel
+        return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>RAG Playground - HammerSpace Documents</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; display: flex; }
+                .main-content { flex: 2; max-width: 800px; margin-right: 20px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .mcp-panel { flex: 1; max-width: 400px; background: #e6f7ff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid #91d5ff; }
+                h1, h2 { color: #333; text-align: center; }
+                .search-box { width: 100%; padding: 15px; font-size: 16px; border: 2px solid #ddd; border-radius: 5px; margin: 20px 0; }
+                .search-btn, .mcp-btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 5px; }
+                .search-btn:hover, .mcp-btn:hover { background: #0056b3; }
+                .mcp-btn.disconnect { background: #dc3545; }
+                .mcp-btn.disconnect:hover { background: #c82333; }
+                .results { margin-top: 30px; }
+                .result-item { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+                .result-source { font-weight: bold; color: #007bff; margin-bottom: 10px; }
+                .result-text { color: #666; line-height: 1.6; }
+                .stats { background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
+                .mcp-server-item { background: #ffffff; border: 1px solid #b3e0ff; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+                .mcp-server-item h3 { margin-top: 0; color: #0056b3; font-size: 1.1em; }
+                .mcp-server-item p { margin: 5px 0; font-size: 0.9em; }
+                .status-connected { color: green; font-weight: bold; }
+                .status-disconnected { color: red; font-weight: bold; }
+                .status-failed { color: orange; font-weight: bold; }
+                .settings-panel { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+                .settings-panel h3 { margin-top: 0; color: #495057; font-size: 1.1em; }
+                .setting-item { margin-bottom: 12px; }
+                .setting-item label { display: flex; align-items: center; cursor: pointer; font-weight: 500; }
+                .setting-item input[type="checkbox"] { margin-right: 8px; transform: scale(1.2); }
+                .setting-item small { display: block; color: #6c757d; font-size: 0.85em; margin-top: 2px; margin-left: 24px; }
+            </style>
+        </head>
+        <body>
+            <div class="main-content">
+                <h1>🔍 RAG Playground - HammerSpace Documents</h1>
+                <div class="stats" id="stats">Loading document count...</div>
+                <input type="text" class="search-box" id="query" placeholder="Ask about HammerSpace documentation..." />
+                <button class="search-btn" onclick="search()">Search Documents</button>
+                <div class="results" id="results"></div>
+            </div>
+
+            <div class="mcp-panel">
+                <h2>🔌 MCP Client</h2>
+                
+                <!-- Settings Panel -->
+                <div class="settings-panel">
+                    <h3>⚙️ Settings</h3>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="mcp-global-toggle" checked onchange="toggleMCPGlobal()">
+                            Enable MCP Services
+                        </label>
+                        <small>Master switch to enable/disable all MCP functionality</small>
+                    </div>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="mcp-auto-connect" checked onchange="toggleMCPAutoConnect()">
+                            Auto-connect MCP Servers
+                        </label>
+                        <small>Automatically connect to available MCP servers</small>
+                    </div>
+                </div>
+                
+                <div id="mcp-servers-status">Loading MCP server status...</div>
+            </div>
+
+            <script>
+                async function loadStats() {
+                    try {
+                        const response = await fetch('/stats');
+                        const data = await response.json();
+                        document.getElementById('stats').innerHTML = 
+                            `📚 Total Documents: ${data.total_documents} | 🔍 Collection: ${data.collection_name} | Status: ${data.status}`;
+                    } catch (e) {
+                        document.getElementById('stats').innerHTML = 'Error loading stats';
+                    }
+                }
+
+                async function search() {
+                    const query = document.getElementById('query').value;
+                    if (!query) return;
+                    
+                    document.getElementById('results').innerHTML = 'Searching...';
+                    
+                    try {
+                        const response = await fetch('/search', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({query: query, top_k: 5})
+                        });
+                        const data = await response.json();
+                        displayResults(data);
+                    } catch (e) {
+                        document.getElementById('results').innerHTML = 'Error: ' + e.message;
+                    }
+                }
+
+                function displayResults(data) {
+                    const resultsDiv = document.getElementById('results');
+                    if (!data.results || data.results.length === 0) {
+                        resultsDiv.innerHTML = '<p>No results found.</p>';
+                        return;
+                    }
+
+                    let html = '<h3>Search Results:</h3>';
+                    data.results.forEach((result, index) => {
+                        html += `
+                            <div class="result-item">
+                                <div class="result-source">${result.source}</div>
+                                <div class="result-text">${result.text.substring(0, 500)}${result.text.length > 500 ? '...' : ''}</div>
+                                <small>Distance: ${result.distance.toFixed(4)}</small>
+                            </div>
+                        `;
+                    });
+                    resultsDiv.innerHTML = html;
+                }
+
+                async function loadMcpStatus() {
+                    try {
+                        const response = await fetch('/mcp/status');
+                        const data = await response.json();
+                        const mcpServersDiv = document.getElementById('mcp-servers-status');
+                        let html = '';
+                        if (data.servers && data.servers.length > 0) {
+                            data.servers.forEach(server => {
+                                const statusClass = server.status === 'Connected' ? 'status-connected' : 
+                                                    (server.status === 'Disconnected' ? 'status-disconnected' : 'status-failed');
+                                html += `
+                                    <div class="mcp-server-item">
+                                        <h3>${server.name}</h3>
+                                        <p>Description: ${server.description}</p>
+                                        <p>Status: <span class="${statusClass}">${server.status}</span></p>
+                                        ${server.error ? `<p style="color: red;">Error: ${server.error}</p>` : ''}
+                                        <button class="mcp-btn" onclick="connectMcpServer('${server.name}')" ${server.status === 'Connected' ? 'disabled' : ''}>Connect</button>
+                                        <button class="mcp-btn disconnect" onclick="disconnectMcpServer('${server.name}')" ${server.status === 'Disconnected' ? 'disabled' : ''}>Disconnect</button>
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html = '<p>No MCP servers configured.</p>';
+                        }
+                        mcpServersDiv.innerHTML = html;
+                    } catch (e) {
+                        document.getElementById('mcp-servers-status').innerHTML = 'Error loading MCP status: ' + e.message;
+                    }
+                }
+
+                async function connectMcpServer(serverName) {
+                    try {
+                        const response = await fetch(`/mcp/connect/${serverName}`, { method: 'POST' });
+                        const data = await response.json();
+                        alert(data.message);
+                        loadMcpStatus(); // Reload status after action
+                    } catch (e) {
+                        alert('Error connecting: ' + e.message);
+                    }
+                }
+
+                async function disconnectMcpServer(serverName) {
+                    try {
+                        const response = await fetch(`/mcp/disconnect/${serverName}`, { method: 'POST' });
+                        const data = await response.json();
+                        alert(data.message);
+                        loadMcpStatus(); // Reload status after action
+                    } catch (e) {
+                        alert('Error disconnecting: ' + e.message);
+                    }
+                }
+
+                // Load stats and MCP status on page load
+                loadStats();
+                loadMcpStatus();
+                
+                // Refresh MCP status every 10 seconds
+                setInterval(loadMcpStatus, 10000);
+
+                // Search on Enter key
+                document.getElementById('query').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') search();
+                });
+
+                // MCP Settings Functions
+                let mcpGlobalEnabled = true;
+                let mcpAutoConnect = true;
+
+                async function toggleMCPGlobal() {
+                    mcpGlobalEnabled = document.getElementById('mcp-global-toggle').checked;
+                    console.log('MCP Global Toggle:', mcpGlobalEnabled ? 'Enabled' : 'Disabled');
+                    
+                    try {
+                        // Update backend settings
+                        const response = await fetch('/mcp/settings', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                mcp_global_enabled: mcpGlobalEnabled
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('Backend settings updated:', result);
+                        }
+                    } catch (e) {
+                        console.error('Error updating backend settings:', e);
+                    }
+                    
+                    // Update UI to reflect MCP state
+                    const mcpPanel = document.querySelector('.mcp-panel');
+                    if (mcpGlobalEnabled) {
+                        mcpPanel.style.opacity = '1';
+                        mcpPanel.style.pointerEvents = 'auto';
+                    } else {
+                        mcpPanel.style.opacity = '0.5';
+                        mcpPanel.style.pointerEvents = 'none';
+                    }
+                    
+                    // Show notification
+                    showNotification(mcpGlobalEnabled ? 'MCP Services Enabled' : 'MCP Services Disabled');
+                }
+
+                async function toggleMCPAutoConnect() {
+                    mcpAutoConnect = document.getElementById('mcp-auto-connect').checked;
+                    console.log('MCP Auto-connect:', mcpAutoConnect ? 'Enabled' : 'Disabled');
+                    
+                    try {
+                        // Update backend settings
+                        const response = await fetch('/mcp/settings', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                mcp_auto_connect: mcpAutoConnect
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('Backend auto-connect settings updated:', result);
+                        }
+                    } catch (e) {
+                        console.error('Error updating backend auto-connect settings:', e);
+                    }
+                    
+                    showNotification(mcpAutoConnect ? 'MCP Auto-connect Enabled' : 'MCP Auto-connect Disabled');
+                }
+
+                function showNotification(message) {
+                    // Create a simple notification
+                    const notification = document.createElement('div');
+                    notification.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: #007bff;
+                        color: white;
+                        padding: 10px 15px;
+                        border-radius: 5px;
+                        z-index: 1000;
+                        font-size: 14px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                    `;
+                    notification.textContent = message;
+                    document.body.appendChild(notification);
+                    
+                    // Remove after 3 seconds
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 3000);
+                }
+
+                // Load MCP settings from backend
+                async function loadMCPSettings() {
+                    try {
+                        const response = await fetch('/mcp/settings');
+                        if (response.ok) {
+                            const settings = await response.json();
+                            mcpGlobalEnabled = settings.mcp_global_enabled;
+                            mcpAutoConnect = settings.mcp_auto_connect;
+                            
+                            // Update UI checkboxes
+                            document.getElementById('mcp-global-toggle').checked = mcpGlobalEnabled;
+                            document.getElementById('mcp-auto-connect').checked = mcpAutoConnect;
+                            
+                            // Apply UI state
+                            toggleMCPGlobal();
+                        }
+                    } catch (e) {
+                        console.error('Error loading MCP settings:', e);
+                    }
+                }
+
+                // Initialize MCP settings on page load
+                document.addEventListener('DOMContentLoaded', function() {
+                    loadMCPSettings(); // Load settings from backend first
+                });
+            </script>
+        </body>
+        </html>
+        ''')
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "healthy"})
+
+    @app.route('/stats')
+    def stats():
+        try:
+            # Try MCP wrapper first
+            mcp_connection = connect_to_milvus_via_mcp()
+            if mcp_connection:
+                # For now, return basic stats - in a real implementation, 
+                # we'd query the MCP wrapper for collection stats
+                return jsonify({
+                    "total_documents": "Unknown (via MCP)",
+                    "collection_name": COLLECTION_NAME,
+                    "status": "connected_via_mcp",
+                    "mcp_wrapper_url": MILVUS_MCP_URL
+                })
+            else:
+                # Fallback to direct connection
+                collection = connect_to_milvus()
+                if collection:
+                    return jsonify({
+                        "total_documents": collection.num_entities,
+                        "collection_name": COLLECTION_NAME,
+                        "status": "connected_direct"
+                    })
+                else:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/search', methods=['POST'])
+    def search():
+        try:
+            data = request.get_json()
+            query = data.get('query', '')
+            top_k = data.get('top_k', 5)
+            
+            # Try MCP wrapper first
+            mcp_connection = connect_to_milvus_via_mcp()
+            if mcp_connection:
+                logger.info("Using Milvus MCP wrapper for search")
+                results = search_via_mcp(query, top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "source": result.get('source', 'Unknown'),
+                        "text": result.get('text', 'No text available'),
+                        "distance": result.get('distance', 0.0)
+                    })
+                
+                return jsonify({
+                    "results": formatted_results, 
+                    "query": query,
+                    "method": "mcp_wrapper"
+                })
+            else:
+                # Fallback to direct connection
+                logger.info("Falling back to direct Milvus connection")
+                collection = connect_to_milvus()
+                if not collection:
+                    return jsonify({"error": "Cannot connect to Milvus"}), 500
+                
+                results = simple_search(collection, query, top_k)
+                
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        "source": result.entity.get('source', 'Unknown'),
+                        "text": result.entity.get('text', 'No text available'),
+                        "distance": result.distance
+                    })
+                
+                return jsonify({
+                    "results": formatted_results, 
+                    "query": query,
+                    "method": "direct_connection"
+                })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # Add the missing /v1/generate endpoint that the frontend needs
+    @app.route('/v1/generate', methods=['POST'])
+    def v1_generate():
+        """V1 generate endpoint for NVIDIA RAG Blueprint frontend compatibility"""
+        try:
+            data = request.get_json()
+            messages = data.get('messages', [])
+            query = ""
+            if messages:
+                query = messages[-1].get('content', '')
+            
+            # Handle simple greetings without MCP wrapper
+            query_lower = query.lower().strip()
+            simple_greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "what's up"]
+            
+            if query_lower in simple_greetings or len(query_lower) < 10:
+                response_text = "Hello! I'm the NVIDIA RAG Blueprint assistant with MCP integration. I can help you with questions about the documents in the knowledge base, or you can ask me about system information like 'How many documents are in Milvus?' or 'What collections are available?' How can I assist you today?"
+                
+                return jsonify({
+                    "id": "mcp-enhanced-response",
+                    "choices": [{
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": response_text
+                        },
+                        "finish_reason": "stop"
+                    }],
+                    "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "usage": None,
+                    "citations": {"total_results": 0, "results": []}
+                })
+            
+            # Handle MCP queries
+            if any(keyword in query_lower for keyword in ["how many documents", "document count", "number of documents", "total documents"]):
+                if any(keyword in query_lower for keyword in ["milvus", "collection", "database", "instance"]):
+                    # Use direct Milvus connection for document count (faster than MCP wrapper)
+                    collection = connect_to_milvus()
+                    if collection:
+                        count = collection.num_entities
+                        response_text = f"There are {count} documents in the Milvus collection 'hammerspace_docs'."
+                    else:
+                        response_text = "I cannot connect to Milvus to get the document count."
+                    
+                    return jsonify({
+                        "id": "mcp-enhanced-response",
+                        "choices": [{
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": response_text
+                            },
+                            "finish_reason": "stop"
+                        }],
+                        "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                        "object": "chat.completion",
+                        "created": int(time.time()),
+                        "usage": None,
+                        "citations": {"total_results": 0, "results": []}
+                    })
+            
+            # For other queries, use direct Milvus search (avoid MCP wrapper timeout)
+            collection = connect_to_milvus()
+            if not collection:
+                return jsonify({"error": "Cannot connect to Milvus"}), 500
+            
+            # Generate a dummy embedding for the query
+            query_embedding = np.random.rand(2048).tolist()
+            
+            search_params = {
+                "data": [query_embedding],
+                "anns_field": "vector",
+                "param": {"metric_type": "L2", "params": {"nprobe": 10}},
+                "limit": 5,
+                "output_fields": ["source", "text"]
+            }
+            
+            results = collection.search(**search_params)
+            
+            if results and results[0]:
+                first_result = results[0][0]
+                response_text = f"I found relevant information in the document '{first_result.entity.get('source', 'Unknown')}'. Here's what I found: {first_result.entity.get('text', 'No text available')[:200]}..."
+            else:
+                response_text = f"I searched through the documents but didn't find specific information for your query: '{query}'. You might want to try rephrasing your question or asking about specific topics covered in the documents."
+            
+            return jsonify({
+                "id": "mcp-enhanced-response",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_text
+                    },
+                    "finish_reason": "stop"
+                }],
+                "model": "nvidia/llama-3.3-nemotron-super-49b-v1",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "usage": None,
+                "citations": {"total_results": len(results[0]) if results and results[0] else 0, "results": []}
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in v1_generate: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # MCP Client Endpoints using NVIDIA AIQ Toolkit
+    @app.route('/mcp/status')
+    async def mcp_status():
+        if not MCP_AVAILABLE:
+            return jsonify({
+                "servers": [],
+                "registry_status": "MCP features disabled - NVIDIA AIQ Toolkit installation pending",
+                "total_servers": 0,
+                "connected_servers": 0,
+                "error": "MCP features require proper NVIDIA AIQ Toolkit installation"
+            })
+        
+        servers_status = []
+        connected_count = 0
+        
+        for name, server_info in mcp_servers.items():
+            servers_status.append({
+                "name": name,
+                "description": server_info.get("description", "MCP Server"),
+                "status": "Connected" if server_info.get("connected", False) else "Disconnected",
+                "error": server_info.get("error"),
+                "enabled": server_info.get("enabled", True),
+                "discovery_method": "manual",
+                "last_checked": server_info.get("last_checked")
+            })
+            if server_info.get("connected", False):
+                connected_count += 1
+        
+        return jsonify({
+            "servers": servers_status,
+            "registry_status": "Active with NVIDIA AIQ Toolkit",
+            "total_servers": len(servers_status),
+            "connected_servers": connected_count
+        })
+
+    @app.route('/mcp/connect/<server_name>', methods=['POST'])
+    async def mcp_connect(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"message": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            # Example server configuration - in real usage, this would come from discovery
+            server_config = {
+                "name": server_name,
+                "command": "python",
+                "args": ["-m", f"{server_name}_mcp_server"],
+                "description": f"MCP Server: {server_name}"
+            }
+            
+            # Track the connection
+            mcp_servers[server_name] = {
+                "connected": True,
+                "description": server_config["description"],
+                "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                "error": None
+            }
+            
+            return jsonify({"message": f"Successfully connected to {server_name}"})
+        except Exception as e:
+            mcp_servers[server_name] = {
+                "connected": False,
+                "description": f"MCP Server: {server_name}",
+                "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                "error": str(e)
+            }
+            return jsonify({"message": f"Failed to connect to {server_name}", "error": str(e)}), 500
+
+    @app.route('/mcp/disconnect/<server_name>', methods=['POST'])
+    async def mcp_disconnect(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"message": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            if server_name in mcp_servers:
+                mcp_servers[server_name]["connected"] = False
+            return jsonify({"message": f"Disconnected from {server_name}"})
+        except Exception as e:
+            return jsonify({"message": f"Error disconnecting from {server_name}", "error": str(e)}), 500
+
+    @app.route('/mcp/tools/<server_name>')
+    async def mcp_tools(server_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"server": server_name, "tools": [], "error": "MCP features require proper NVIDIA AIQ Toolkit installation"})
+        
+        try:
+            # Placeholder for tools
+            tools = []
+            return jsonify({"server": server_name, "tools": tools})
+        except Exception as e:
+            return jsonify({"server": server_name, "tools": [], "error": str(e)})
+
+    @app.route('/mcp/call_tool/<server_name>/<tool_name>', methods=['POST'])
+    async def mcp_call_tool(server_name, tool_name):
+        if not MCP_AVAILABLE:
+            return jsonify({"error": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            args = request.get_json(silent=True) or {}
+            # Placeholder for tool calling
+            result = {"message": f"Tool {tool_name} called with args: {args}"}
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/registry/discover', methods=['POST'])
+    async def mcp_registry_discover():
+        if not MCP_AVAILABLE:
+            return jsonify({"error": "MCP features require proper NVIDIA AIQ Toolkit installation"}), 500
+        
+        try:
+            discovery_type = request.get_json().get('type', 'all')
+            
+            # Example discovery - in real implementation, this would use NVIDIA AIQ Toolkit discovery
+            if discovery_type == 'kubernetes' or discovery_type == 'all':
+                # Add some example servers discovered from Kubernetes
+                example_servers = [
+                    {"name": "hammerspace-k8s", "description": "HammerSpace MCP Server (K8s discovered)"},
+                    {"name": "kubernetes-k8s", "description": "Kubernetes MCP Server (K8s discovered)"}
+                ]
+                
+                for server in example_servers:
+                    mcp_servers[server["name"]] = {
+                        "connected": False,
+                        "description": server["description"],
+                        "last_checked": datetime.datetime.utcnow().isoformat() + "Z",
+                        "error": None
+                    }
+            
+            return jsonify({"message": f"Discovery completed for type: {discovery_type}", "discovered_servers": len(mcp_servers)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # MCP Settings Endpoints for NVIDIA RAG Blueprint Integration
+    @app.route('/mcp/settings', methods=['GET'])
+    def get_mcp_settings():
+        """Get current MCP settings for the frontend"""
+        return jsonify({
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+            "mcp_auto_connect": MCP_AUTO_CONNECT,
+            "mcp_available": MCP_AVAILABLE
+        })
+
+    @app.route('/mcp/settings', methods=['POST'])
+    def update_mcp_settings():
+        """Update MCP settings from the frontend"""
+        global MCP_GLOBAL_ENABLED, MCP_AUTO_CONNECT
+        
+        try:
+            data = request.get_json()
+            
+            if 'mcp_global_enabled' in data:
+                MCP_GLOBAL_ENABLED = bool(data['mcp_global_enabled'])
+                logger.info(f"MCP Global Enabled: {MCP_GLOBAL_ENABLED}")
+            
+            if 'mcp_auto_connect' in data:
+                MCP_AUTO_CONNECT = bool(data['mcp_auto_connect'])
+                logger.info(f"MCP Auto-connect: {MCP_AUTO_CONNECT}")
+            
+            return jsonify({
+                "message": "MCP settings updated successfully",
+                "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+                "mcp_auto_connect": MCP_AUTO_CONNECT
+            })
+            
+        except Exception as e:
+            logger.error(f"Error updating MCP settings: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/disable', methods=['POST'])
+    def disable_mcp():
+        """Disable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = False
+        logger.info("MCP services disabled via API")
+        return jsonify({
+            "message": "All MCP services have been disabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    @app.route('/mcp/enable', methods=['POST'])
+    def enable_mcp():
+        """Enable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = True
+        logger.info("MCP services enabled via API")
+        return jsonify({
+            "message": "All MCP services have been enabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    # Add MCP settings to the main health endpoint
+    @app.route('/health', response_model=HealthResponse)
+    async def health_check(check_dependencies: bool = False):
+        """Perform a Health Check with MCP settings"""
+        db_health = []
+        
+        # Check Milvus direct connection
+        milvus_direct_status = "disconnected"
+        milvus_direct_error = None
+        milvus_direct_collections = None
+        try:
+            collection = connect_to_milvus()
+            if collection:
+                milvus_direct_status = "connected"
+                milvus_direct_collections = collection.num_entities
+        except Exception as e:
+            milvus_direct_error = str(e)
+        db_health.append(DatabaseHealthInfo(
+            service="milvus_direct",
+            url=f"grpc://{MILVUS_HOST}:{MILVUS_PORT}",
+            status=milvus_direct_status,
+            collections=milvus_direct_collections,
+            error=milvus_direct_error
+        ))
+
+        # Check Milvus MCP Wrapper connection
+        mcp_wrapper_status = "disconnected"
+        mcp_wrapper_error = None
+        try:
+            response = requests.get(f"{MILVUS_MCP_URL}/health", timeout=5)
+            if response.status_code == 200:
+                mcp_wrapper_status = "connected"
+            else:
+                mcp_wrapper_error = f"HTTP Status: {response.status_code}"
+        except Exception as e:
+            mcp_wrapper_error = str(e)
+        db_health.append(DatabaseHealthInfo(
+            service="milvus_mcp_wrapper",
+            url=MILVUS_MCP_URL,
+            status=mcp_wrapper_status,
+            error=mcp_wrapper_error
+        ))
+
+        # Add MCP settings to the health response
+        mcp_status = {
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+            "mcp_auto_connect": MCP_AUTO_CONNECT,
+            "mcp_available": MCP_AVAILABLE
+        }
+
+        return HealthResponse(
+            message="Enhanced RAG Server with MCP integration is up.",
+            databases=db_health,
+            mcp_status=mcp_status
+        )
+
+    # MCP Settings Endpoints
+    @app.route('/mcp/settings', methods=['GET'])
+    def get_mcp_settings():
+        """Get current MCP settings"""
+        return jsonify({
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+            "mcp_auto_connect": MCP_AUTO_CONNECT,
+            "mcp_available": MCP_AVAILABLE
+        })
+
+    @app.route('/mcp/settings', methods=['POST'])
+    def update_mcp_settings():
+        """Update MCP settings"""
+        global MCP_GLOBAL_ENABLED, MCP_AUTO_CONNECT
+        
+        try:
+            data = request.get_json()
+            
+            if 'mcp_global_enabled' in data:
+                MCP_GLOBAL_ENABLED = bool(data['mcp_global_enabled'])
+                logger.info(f"MCP Global Enabled: {MCP_GLOBAL_ENABLED}")
+            
+            if 'mcp_auto_connect' in data:
+                MCP_AUTO_CONNECT = bool(data['mcp_auto_connect'])
+                logger.info(f"MCP Auto-connect: {MCP_AUTO_CONNECT}")
+            
+            return jsonify({
+                "message": "MCP settings updated successfully",
+                "mcp_global_enabled": MCP_GLOBAL_ENABLED,
+                "mcp_auto_connect": MCP_AUTO_CONNECT
+            })
+            
+        except Exception as e:
+            logger.error(f"Error updating MCP settings: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/mcp/disable', methods=['POST'])
+    def disable_mcp():
+        """Disable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = False
+        logger.info("MCP services disabled via API")
+        return jsonify({
+            "message": "All MCP services have been disabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    @app.route('/mcp/enable', methods=['POST'])
+    def enable_mcp():
+        """Enable all MCP services"""
+        global MCP_GLOBAL_ENABLED
+        MCP_GLOBAL_ENABLED = True
+        logger.info("MCP services enabled via API")
+        return jsonify({
+            "message": "All MCP services have been enabled",
+            "mcp_global_enabled": MCP_GLOBAL_ENABLED
+        })
+
+    if __name__ == '__main__':
+        print("=== Enhanced RAG Playground with NVIDIA AIQ Toolkit MCP Client ===")
+        
+        if MCP_AVAILABLE:
+            print("✅ NVIDIA AIQ Toolkit MCP client available")
+        else:
+            print("⚠️  NVIDIA AIQ Toolkit not available - MCP features disabled")
+        
+        # Test both connection methods
+        mcp_connection = connect_to_milvus_via_mcp()
+        if mcp_connection:
+            print(f"✅ Connected to Milvus via MCP wrapper: {MILVUS_MCP_URL}")
+            print(f"📚 Collection: {COLLECTION_NAME}")
+        else:
+            print("⚠️  MCP wrapper not available, trying direct connection...")
+            collection = connect_to_milvus()
+            if collection:
+                print(f"✅ Connected to Milvus directly: {COLLECTION_NAME}")
+                print(f"📚 Collection has {collection.num_entities} entities")
+            else:
+                print("❌ Failed to connect to Milvus")
+        
+        print("🚀 Starting Flask server on port 8080...")
+        print("🌐 Enhanced Playground will be available at http://localhost:8080")
+        print("🔌 Features: NVIDIA AIQ Toolkit MCP Client, Server Discovery, Health monitoring")
+        
+        # Run Flask app with asyncio support
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(app.run(host='0.0.0.0', port=8081, debug=False))

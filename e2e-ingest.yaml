@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-ingest-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: e2e
+        image: curlimages/curl
+        command: ["/bin/sh","-lc"]
+        args:
+        - |
+          set -e
+          echo "1) Health check";
+          curl -sf http://ingestor-server:8082/health; echo;
+          echo "2) Create collection cross_host_test";
+          curl -sf -X POST http://ingestor-server:8082/collection -H 'Content-Type: application/json' -d '{"collection_name":"cross_host_test"}'; echo;
+          echo "3) Create test file";
+          echo "Cross host ingestion test $(date)" > /tmp/doc.txt;
+          echo "4) Upload document";
+          RESP=$(curl -sf -X POST http://ingestor-server:8082/documents -F 'documents=@/tmp/doc.txt' -F 'data={"collection_name":"cross_host_test"}'); echo "$RESP";
+          TASK=$(echo "$RESP" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4 || true);
+          echo "TASK=$TASK";
+          echo "5) Wait for processing..."; sleep 180;
+          echo "6) List collections";
+          curl -sf http://ingestor-server:8082/collections; echo;
+      restartPolicy: Never
+  backoffLimit: 0

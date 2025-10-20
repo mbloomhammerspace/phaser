@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: check-collections-proper
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: check-collections
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== CHECKING COLLECTIONS STATUS ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Checking all collections..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "3. Checking specific collection: single_pdf_test..."
+          curl -s http://10.233.51.201:8082/collections/single_pdf_test
+          echo ""
+          echo ""
+          echo "4. Checking meta collection..."
+          curl -s http://10.233.51.201:8082/collections/meta
+          echo ""
+          echo ""
+          echo "=== COLLECTIONS CHECK COMPLETE ==="
+      restartPolicy: Never

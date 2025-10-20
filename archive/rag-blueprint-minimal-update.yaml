@@ -1,0 +1,41 @@
+# Minimal Blueprint Update - Only Enable NIMs and Update NGC Key
+
+# Update NGC API Key to working build.nvidia.com key
+ngcApiSecret:
+  password: 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
+
+imagePullSecret:
+  password: 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
+
+# Enable NIM LLM
+nim-llm:
+  enabled: true
+  model:
+    ngcAPIKey: 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
+
+# Enable NIM Embedding
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+  model:
+    ngcAPIKey: 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
+
+# Enable Text Reranking NIM
+text-reranking-nim:
+  enabled: true
+  model:
+    ngcAPIKey: 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
+
+# Update global NGC key in environment
+envVars:
+  NGC_API_KEY: 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
+  NVIDIA_API_KEY: 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
+
+# Update ingestor NGC keys
+ingestor-server:
+  envVars:
+    NGC_API_KEY: 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
+    NVIDIA_API_KEY: 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
+  nv-ingest:
+    env:
+      NGC_API_KEY: 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
+      NVIDIA_API_KEY: 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

@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: monitor-new-ingestion
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: monitor
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        pip install pymilvus
+        python3 -c "
+        from pymilvus import connections, utility
+        import time
+        import subprocess
+        
+        def get_live_progress():
+            try:
+                connections.connect('default', host='milvus', port='19530')
+                from pymilvus import Collection
+                
+                # Check if new collection exists
+                if utility.has_collection('pdfs_new_ingestion'):
+                    c = Collection('pdfs_new_ingestion')
+                    current_count = c.num_entities
+                else:
+                    current_count = 0
+                
+                # Get latest processing status from logs
+                try:
+                    result = subprocess.run(['kubectl', 'logs', 'ingest-pdfs-new-collection', '--tail=20'], 
+                                          capture_output=True, text=True, timeout=15)
+                    if result.returncode == 0:
+                        lines = result.stdout.strip().split('\n')
+                        latest_progress = 'No recent progress found'
+                        for line in reversed(lines):
+                            if 'Progress:' in line and 'files processed' in line:
+                                latest_progress = line
+                                break
+                    else:
+                        latest_progress = 'Could not fetch logs'
+                except Exception as e:
+                    latest_progress = f'Log fetch error: {str(e)[:50]}'
+                
+                print('=' * 80)
+                print(f'🔄 LIVE PDF INGESTION PROGRESS - {time.strftime(\"%H:%M:%S UTC\")}')
+                print('=' * 80)
+                print(f'📊 Current Documents in pdfs_new_ingestion: {current_count:,}')
+                print(f'📈 Latest Processing: {latest_progress}')
+                print('=' * 80)
+                
+                # Calculate rough progress percentage
+                total_files = 71825  # From our earlier count
+                if 'Progress:' in latest_progress:
+                    try:
+                        processed_part = latest_progress.split('Progress: ')[1].split(' files processed')[0]
+                        processed_num = int(processed_part.replace(',', ''))
+                        percentage = (processed_num / total_files) * 100
+                        print(f'📋 Files Processed: {processed_num:,} / {total_files:,} ({percentage:.1f}%)')
+                        
+                        # Calculate ETA
+                        if processed_num > 0:
+                            try:
+                                rate_part = latest_progress.split('Rate: ')[1].split(' files/sec')[0]
+                                rate = float(rate_part)
+                                remaining = total_files - processed_num
+                                eta_seconds = remaining / rate if rate > 0 else 0
+                                eta_hours = eta_seconds / 3600
+                                print(f'⏱️  ETA: {eta_hours:.1f} hours at current rate')
+                            except:
+                                pass
+                    except:
+                        pass
+                
+                print('=' * 80)
+                
+            except Exception as e:
+                print(f'❌ Error: {e}')
+        
+        # Run monitoring loop
+        while True:
+            get_live_progress()
+            time.sleep(30)  # Update every 30 seconds
+        "

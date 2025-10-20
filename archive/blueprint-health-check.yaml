@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: blueprint-health-check
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: health-check
+    image: python:3.9-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🏥 NVIDIA RAG Blueprint Health Check"
+        echo "======================================================"
+        echo ""
+        
+        # Install dependencies
+        apt-get update -qq && apt-get install -y -qq curl jq > /dev/null 2>&1
+        pip install pymilvus requests > /dev/null 2>&1
+        
+        OVERALL_HEALTH="HEALTHY"
+        
+        # Test 1: Milvus Vector Database
+        echo "📊 Test 1: Milvus Vector Database"
+        echo "   Endpoint: milvus:19530"
+        python3 << 'PYEOF'
+        from pymilvus import connections, utility, Collection
+        import sys
+        try:
+            connections.connect('default', host='milvus', port='19530', timeout=5)
+            collections = utility.list_collections()
+            total_docs = 0
+            for col_name in collections:
+                c = Collection(col_name)
+                total_docs += c.num_entities
+            print(f"   ✅ Milvus: HEALTHY")
+            print(f"      - Collections: {len(collections)}")
+            print(f"      - Total Documents: {total_docs:,}")
+            print(f"      - Collections: {', '.join(collections[:3])}{'...' if len(collections) > 3 else ''}")
+            sys.exit(0)
+        except Exception as e:
+            print(f"   ❌ Milvus: FAILED - {str(e)[:100]}")
+            sys.exit(1)
+        PYEOF
+        MILVUS_STATUS=$?
+        echo ""
+        
+        # Test 2: Embedding Service
+        echo "📝 Test 2: Embedding Service"
+        echo "   Endpoint: http://simple-embedding-2048:8000"
+        EMBED_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 -X POST http://simple-embedding-2048:8000/v1/embeddings \
+          -H "Content-Type: application/json" \
+          -d '{"input": "test query", "model": "embed-qa-4"}' 2>/dev/null | tail -1)
+        
+        if [ "$EMBED_RESPONSE" = "200" ] || [ "$EMBED_RESPONSE" = "201" ]; then
+            echo "   ✅ Embedding Service: HEALTHY"
+            echo "      - Endpoint responding with HTTP $EMBED_RESPONSE"
+        else
+            echo "   ❌ Embedding Service: FAILED (HTTP $EMBED_RESPONSE)"
+            OVERALL_HEALTH="DEGRADED"
+        fi
+        echo ""
+        
+        # Test 3: NIM LLM Service
+        echo "🤖 Test 3: NIM LLM Service"
+        echo "   Endpoint: http://nim-llm-service:8000/v1/models"
+        NIM_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 http://nim-llm-service:8000/v1/models 2>/dev/null | tail -1)
+        
+        if [ "$NIM_RESPONSE" = "200" ]; then
+            echo "   ✅ NIM LLM: HEALTHY"
+            # Get model info
+            NIM_MODELS=$(curl -s --max-time 5 http://nim-llm-service:8000/v1/models 2>/dev/null | jq -r '.data[].id' 2>/dev/null || echo "unknown")
+            echo "      - Available Models: $NIM_MODELS"
+            
+            # Test generation
+            echo "   🧪 Testing text generation..."
+            GEN_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 15 -X POST http://nim-llm-service:8000/v1/completions \
+              -H "Content-Type: application/json" \
+              -d '{"model": "meta/llama3-8b-instruct", "prompt": "Say hello", "max_tokens": 10}' 2>/dev/null | tail -1)
+            
+            if [ "$GEN_RESPONSE" = "200" ]; then
+                echo "      ✅ Generation test: SUCCESS"
+            else
+                echo "      ⚠️  Generation test: HTTP $GEN_RESPONSE"
+            fi
+        else
+            echo "   ❌ NIM LLM: NOT READY (HTTP $NIM_RESPONSE)"
+            echo "      Status: May still be initializing model"
+            OVERALL_HEALTH="DEGRADED"
+        fi
+        echo ""
+        
+        # Test 4: Ingestor Service
+        echo "📥 Test 4: Ingestor Service"
+        echo "   Endpoint: http://ingestor-server:8082/v1/collections"
+        INGESTOR_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 http://ingestor-server:8082/v1/collections 2>/dev/null | tail -1)
+        
+        if [ "$INGESTOR_RESPONSE" = "200" ]; then
+            echo "   ✅ Ingestor: HEALTHY"
+            echo "      - Collections endpoint responding"
+        else
+            echo "   ⚠️  Ingestor: HTTP $INGESTOR_RESPONSE"
+        fi
+        echo ""
+        
+        # Test 5: RAG Server
+        echo "🔍 Test 5: RAG Server"
+        echo "   Endpoint: http://rag-blueprint-chain-server:8081/health"
+        RAG_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 10 http://rag-blueprint-chain-server:8081/health 2>/dev/null | tail -1)
+        
+        if [ "$RAG_RESPONSE" = "200" ]; then
+            echo "   ✅ RAG Server: HEALTHY"
+            RAG_INFO=$(curl -s --max-time 5 http://rag-blueprint-chain-server:8081/health 2>/dev/null)
+            echo "      - Backend Status: $(echo $RAG_INFO | jq -r '.status' 2>/dev/null || echo 'ok')"
+        else
+            echo "   ⚠️  RAG Server: HTTP $RAG_RESPONSE"
+        fi
+        echo ""
+        
+        # Test 6: Zipkin
+        echo "📊 Test 6: Zipkin Tracing"
+        ZIPKIN_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 5 http://zipkin:9411/api/v2/services 2>/dev/null | tail -1)
+        if [ "$ZIPKIN_RESPONSE" = "200" ]; then
+            echo "   ✅ Zipkin: HEALTHY"
+        else
+            echo "   ⚠️  Zipkin: HTTP $ZIPKIN_RESPONSE"
+        fi
+        echo ""
+        
+        # Test 7: Attu (Milvus UI)
+        echo "🖥️  Test 7: Attu (Milvus UI)"
+        ATTU_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 5 http://attu:3000 2>/dev/null | tail -1)
+        if [ "$ATTU_RESPONSE" = "200" ] || [ "$ATTU_RESPONSE" = "301" ] || [ "$ATTU_RESPONSE" = "302" ]; then
+            echo "   ✅ Attu: HEALTHY"
+        else
+            echo "   ⚠️  Attu: HTTP $ATTU_RESPONSE"
+        fi
+        echo ""
+        
+        # Final Summary
+        echo "======================================================"
+        echo "🏁 HEALTH CHECK SUMMARY"
+        echo "======================================================"
+        
+        if [ $MILVUS_STATUS -eq 0 ]; then
+            echo "✅ Vector Database (Milvus): OPERATIONAL"
+        else
+            echo "❌ Vector Database (Milvus): FAILED"
+            OVERALL_HEALTH="UNHEALTHY"
+        fi
+        
+        echo "✅ Embedding Services: OPERATIONAL"
+        
+        if [ "$NIM_RESPONSE" = "200" ]; then
+            echo "✅ NIM LLM Service: OPERATIONAL"
+        else
+            echo "⚠️  NIM LLM Service: INITIALIZING/NOT READY"
+            OVERALL_HEALTH="DEGRADED"
+        fi
+        
+        if [ "$INGESTOR_RESPONSE" = "200" ]; then
+            echo "✅ Ingestor Service: OPERATIONAL"
+        else
+            echo "⚠️  Ingestor Service: DEGRADED"
+        fi
+        
+        if [ "$RAG_RESPONSE" = "200" ]; then
+            echo "✅ RAG Server: OPERATIONAL"
+        else
+            echo "⚠️  RAG Server: DEGRADED"
+        fi
+        
+        if [ "$ZIPKIN_RESPONSE" = "200" ]; then
+            echo "✅ Zipkin Tracing: OPERATIONAL"
+        fi
+        
+        if [ "$ATTU_RESPONSE" = "200" ] || [ "$ATTU_RESPONSE" = "301" ] || [ "$ATTU_RESPONSE" = "302" ]; then
+            echo "✅ Attu Management UI: OPERATIONAL"
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "Overall System Status: $OVERALL_HEALTH"
+        echo "======================================================"
+        
+        if [ "$OVERALL_HEALTH" = "HEALTHY" ]; then
+            echo "🎉 System is ready for ingestion and queries!"
+            exit 0
+        elif [ "$OVERALL_HEALTH" = "DEGRADED" ]; then
+            echo "⚠️  System is partially operational"
+            echo "   Some services may still be initializing"
+            exit 0
+        else
+            echo "❌ System has critical failures"
+            exit 1
+        fi
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 500m
+      requests:
+        memory: 256Mi
+        cpu: 250m

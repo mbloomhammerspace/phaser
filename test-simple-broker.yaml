@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-simple-broker
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: simple-broker-test
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== TESTING WITH SIMPLE BROKER CONFIGURATION ==="
+          echo ""
+          echo "✅ SIMPLE BROKER CONFIGURATION:"
+          echo "  • NV ingest: MESSAGE_CLIENT_TYPE=simple, PORT=7671"
+          echo "  • Ingestor-server: connects to nv-ingest-ms-runtime:7671"
+          echo "  • No Redis dependency - direct communication"
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating simple broker test document..."
+          echo "Simple Broker Test Document" > simple_broker_test.txt
+          echo "" >> simple_broker_test.txt
+          echo "This document tests the simple broker configuration" >> simple_broker_test.txt
+          echo "which bypasses Redis and uses direct communication." >> simple_broker_test.txt
+          echo "" >> simple_broker_test.txt
+          echo "Configuration Details:" >> simple_broker_test.txt
+          echo "- Message client type: simple" >> simple_broker_test.txt
+          echo "- Communication port: 7671" >> simple_broker_test.txt
+          echo "- No Redis dependency" >> simple_broker_test.txt
+          echo "- Direct pod-to-pod communication" >> simple_broker_test.txt
+          echo "" >> simple_broker_test.txt
+          echo "Expected Results:" >> simple_broker_test.txt
+          echo "- Document should be processed successfully" >> simple_broker_test.txt
+          echo "- Collection should show non-zero entity count" >> simple_broker_test.txt
+          echo "- Vectors should be stored in Milvus" >> simple_broker_test.txt
+          echo "- Processing should complete without errors" >> simple_broker_test.txt
+          echo ""
+          echo "Timestamp: $(date)" >> simple_broker_test.txt
+          echo "✅ Simple broker test document created"
+          echo ""
+          echo "3. Creating simple_broker_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "simple_broker_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for simple broker test..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@simple_broker_test.txt" \
+            -F 'data={"collection_name": "simple_broker_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. Waiting 120 seconds for processing..."
+            sleep 120
+            echo ""
+            echo "6. Checking simple broker collections status..."
+            curl -s http://10.233.51.201:8082/collections
+            echo ""
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "=== SIMPLE BROKER TEST COMPLETE ==="
+      restartPolicy: Never

@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: delete-empty-collections
+  namespace: default
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: cleaner
+        image: python:3.11-slim
+        command: ["/bin/sh","-lc"]
+        args:
+          - |
+            set -e
+            pip install -q marshmallow>=3.13 environs>=9.5.0 pymilvus==2.4.4
+            python - << 'PY'
+            from pymilvus import connections, utility, Collection
+            import os
+            host = os.environ.get('MILVUS_HOST','milvus')
+            port = os.environ.get('MILVUS_PORT','19530')
+            connections.connect(host=host, port=port)
+            keep = {"blueprint_single","meta","metadata_schema"}
+            cols = utility.list_collections()
+            deleted = []
+            kept = []
+            for name in cols:
+                try:
+                    coll = Collection(name)
+                    coll.load(timeout=10)
+                    num = coll.num_entities
+                    coll.release()
+                except Exception as e:
+                    num = -1
+                if name in keep:
+                    kept.append((name, num, "kept_reserved"))
+                elif num == 0:
+                    try:
+                        utility.drop_collection(name)
+                        deleted.append((name, num, "dropped"))
+                    except Exception as e:
+                        kept.append((name, num, f"keep_error:{e}"))
+                else:
+                    kept.append((name, num, "kept_nonempty"))
+            print("DELETED:")
+            for r in deleted:
+                print(r)
+            print("KEPT:")
+            for r in kept:
+                print(r)
+            PY
+        env:
+        - name: MILVUS_HOST
+          value: "milvus"
+        - name: MILVUS_PORT
+          value: "19530"
+  backoffLimit: 0

@@ -1,0 +1,16 @@
+frontend:
+  env:
+    - name: NEXT_PUBLIC_MODEL_NAME
+      value: "meta/llama3-8b-instruct"
+    - name: NEXT_PUBLIC_CHAT_BASE_URL
+      value: "http://rag-server:8081/v1"
+    - name: NEXT_PUBLIC_VDB_BASE_URL
+      value: "http://ingestor-server:8082/v1"
+
+rag-server:
+  env:
+    - name: APP_LLM_MODELNAME
+      value: "meta/llama3-8b-instruct"
+    - name: APP_LLM_SERVERURL
+      value: "http://nim-llm-deploy:8000"
+

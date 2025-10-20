@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-collections
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-collections
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Testing collections endpoint..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo "Testing health endpoint..."
+          curl -s http://10.233.51.201:8082/health
+      restartPolicy: Never

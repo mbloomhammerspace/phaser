@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-mcp-server
+  namespace: default
+  labels:
+    app: milvus-mcp-server
+spec:
+  restartPolicy: Always
+  containers:
+  - name: milvus-mcp-server
+    image: python:3.11-slim
+    ports:
+    - containerPort: 8000
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing system packages..."
+        apt-get update && apt-get install -y git
+        echo "Installing Python packages..."
+        pip install --upgrade pip
+        pip install uv
+        echo "Cloning Milvus MCP Server..."
+        git clone https://github.com/zilliztech/mcp-server-milvus.git /app/mcp-server-milvus
+        cd /app/mcp-server-milvus
+        echo "Installing MCP Server dependencies..."
+        uv sync
+        echo "Starting Milvus MCP Server..."
+        echo "Connecting to Milvus at: milvus-external-etcd-clean:19530"
+        echo "MCP Server will run in stdio mode - ready for client connections"
+        # Keep the server running by providing a persistent input stream
+        echo '{"jsonrpc":"2.0","id":1,"method":"ping"}' | uv run src/mcp_server_milvus/server.py --milvus-uri http://milvus-external-etcd-clean:19530 &
+        # Keep the container running
+        tail -f /dev/null
+    env:
+    - name: MILVUS_URI
+      value: "http://milvus-external-etcd-clean:19530"
+    - name: PYTHONPATH
+      value: "/app/mcp-server-milvus"
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-mcp-server-service
+  namespace: default
+spec:
+  selector:
+    app: milvus-mcp-server
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: milvus-mcp-server-config
+  namespace: default
+data:
+  server_config.yaml: |
+    milvus:
+      uri: "http://milvus-standalone:19530"
+      timeout: 30
+    mcp:
+      port: 8000
+      host: "0.0.0.0"

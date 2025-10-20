@@ -1,0 +1,13 @@
+# Enable NIMs and Update NGC Key - Minimal Changes Only
+
+ngcApiSecret:
+  password: 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
+
+nim-llm:
+  enabled: true
+
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+
+text-reranking-nim:
+  enabled: true

@@ -1,0 +1,237 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-pote
+  namespace: default
+  labels:
+    app: triton-pote
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton-pote
+  template:
+    metadata:
+      labels:
+        app: triton-pote
+    spec:
+      containers:
+      - name: triton-pote
+        image: nvcr.io/nvidia/tritonserver:24.10-py3
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 8001
+          name: grpc
+        - containerPort: 8002
+          name: metrics
+        env:
+        - name: TRITON_SERVER_HTTP_PORT
+          value: "8000"
+        - name: TRITON_SERVER_GRPC_PORT
+          value: "8001"
+        - name: TRITON_SERVER_METRICS_PORT
+          value: "8002"
+        - name: TRITON_SERVER_MODEL_REPOSITORY
+          value: "/models"
+        - name: TRITON_SERVER_ALLOW_HTTP
+          value: "true"
+        - name: TRITON_SERVER_ALLOW_GRPC
+          value: "true"
+        - name: TRITON_SERVER_ALLOW_METRICS
+          value: "true"
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            echo "🚀 Starting Triton Inference Server with PotE..."
+            
+            # Install additional tools
+            pip install tritonclient[all] requests numpy
+            
+            # Create a simple model repository for testing
+            mkdir -p /models/test_model/1
+            cat > /models/test_model/config.pbtxt << 'EOF'
+            name: "test_model"
+            platform: "python"
+            max_batch_size: 8
+            input [
+              {
+                name: "INPUT0"
+                data_type: TYPE_STRING
+                dims: [ -1 ]
+              }
+            ]
+            output [
+              {
+                name: "OUTPUT0"
+                data_type: TYPE_STRING
+                dims: [ -1 ]
+              }
+            ]
+            instance_group [
+              {
+                count: 1
+                kind: KIND_GPU
+                gpus: [ 0 ]
+              }
+            ]
+            EOF
+            
+            # Create a simple Python model for testing
+            cat > /models/test_model/1/model.py << 'EOF'
+            import triton_python_backend_utils as pb_utils
+            import numpy as np
+            import time
+            import json
+
+            class TritonPythonModel:
+                def initialize(self, args):
+                    self.model_config = json.loads(args['model_config'])
+                    self.output0_config = pb_utils.get_output_config_by_name(
+                        self.model_config, "OUTPUT0")
+                    self.output0_dtype = pb_utils.triton_string_to_numpy(
+                        self.output0_config['data_type'])
+
+                def execute(self, requests):
+                    responses = []
+                    for request in requests:
+                        input0 = pb_utils.get_input_tensor_by_name(request, "INPUT0")
+                        input_text = input0.as_numpy()[0].decode('utf-8')
+                        
+                        # Simulate token generation with configurable delay
+                        tokens = input_text.split()
+                        output_tokens = []
+                        
+                        for i, token in enumerate(tokens):
+                            # Simulate processing time (adjust for testing)
+                            time.sleep(0.01)  # 10ms per token
+                            output_tokens.append(f"processed_{token}")
+                        
+                        output_text = " ".join(output_tokens)
+                        output_tensor = pb_utils.Tensor("OUTPUT0", 
+                                                      np.array([output_text.encode('utf-8')], 
+                                                              dtype=object))
+                        response = pb_utils.InferenceResponse(output_tensors=[output_tensor])
+                        responses.append(response)
+                    
+                    return responses
+
+                def finalize(self):
+                    pass
+            EOF
+            
+            echo "📊 Starting Triton Server..."
+            tritonserver --model-repository=/models --allow-http=true --allow-grpc=true --allow-metrics=true &
+            TRITON_PID=$!
+            
+            # Wait for server to start
+            echo "⏳ Waiting for Triton server to start..."
+            sleep 10
+            
+            # Install and run PotE
+            echo "🔧 Installing PotE..."
+            pip install pote
+            
+            echo "🧪 Running PotE performance test..."
+            cat > /tmp/pote_test.py << 'EOF'
+            import asyncio
+            import time
+            import tritonclient.http as httpclient
+            import numpy as np
+            from pote import PotE
+
+            async def test_throughput():
+                # Connect to Triton server
+                client = httpclient.InferenceServerClient("localhost:8000")
+                
+                # Test data
+                test_prompts = [
+                    "This is a test prompt for token generation performance testing.",
+                    "Another test prompt to measure throughput and latency.",
+                    "Performance testing with multiple concurrent requests.",
+                    "Measuring tokens per second with PotE tool.",
+                    "Load testing the NIM inference server capabilities."
+                ]
+                
+                # PotE configuration
+                pote_config = {
+                    "endpoint": "http://localhost:8000/v2/models/test_model/infer",
+                    "concurrent_requests": 10,
+                    "total_requests": 100,
+                    "request_timeout": 30,
+                    "warmup_requests": 5
+                }
+                
+                print("🚀 Starting PotE performance test...")
+                print(f"📊 Configuration: {pote_config}")
+                
+                # Run PotE test
+                results = await PotE.run_test(pote_config)
+                
+                print("📈 PotE Test Results:")
+                print(f"   Total Requests: {results.get('total_requests', 'N/A')}")
+                print(f"   Successful Requests: {results.get('successful_requests', 'N/A')}")
+                print(f"   Failed Requests: {results.get('failed_requests', 'N/A')}")
+                print(f"   Average Latency: {results.get('avg_latency_ms', 'N/A')} ms")
+                print(f"   P95 Latency: {results.get('p95_latency_ms', 'N/A')} ms")
+                print(f"   P99 Latency: {results.get('p99_latency_ms', 'N/A')} ms")
+                print(f"   Requests per Second: {results.get('rps', 'N/A')}")
+                print(f"   Time to First Token: {results.get('ttft_ms', 'N/A')} ms")
+                print(f"   Tokens per Second: {results.get('tokens_per_second', 'N/A')}")
+                
+                return results
+
+            if __name__ == "__main__":
+                asyncio.run(test_throughput())
+            EOF
+            
+            # Run the test
+            python /tmp/pote_test.py
+            
+            # Keep container running for interactive use
+            echo "✅ PotE test completed. Container ready for interactive use."
+            echo "🔧 You can now run additional tests or connect to the Triton server."
+            wait $TRITON_PID
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "1"
+            memory: "2Gi"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+      volumes:
+      - name: models
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triton-pote-service
+  namespace: default
+  labels:
+    app: triton-pote
+spec:
+  type: NodePort
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30800
+    name: http
+  - port: 8001
+    targetPort: 8001
+    nodePort: 30801
+    name: grpc
+  - port: 8002
+    targetPort: 8002
+    nodePort: 30802
+    name: metrics
+  selector:
+    app: triton-pote

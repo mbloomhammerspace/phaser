@@ -2,34 +2,35 @@ import os
 import sys
 import fitz
 import json
+import time
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 import numpy as np
 
 def connect_to_milvus():
     try:
         connections.connect('default', host='milvus', port='19530')
-        print("Connected to Milvus")
+        print("✅ Connected to Milvus")
         return True
     except Exception as e:
-        print("Failed to connect to Milvus:", e)
+        print("❌ Failed to connect to Milvus:", e)
         return False
 
-def create_all_pdfs_collection():
-    collection_name = 'all_pdfs'
+def create_new_pdfs_collection():
+    collection_name = 'pdfs_new_ingestion'
     
     # Drop existing collection if it exists
     if utility.has_collection(collection_name):
-        print(f"Dropping existing collection: {collection_name}")
+        print(f"🗑️  Dropping existing collection: {collection_name}")
         utility.drop_collection(collection_name)
     
-    print(f"Creating new collection: {collection_name}")
+    print(f"🆕 Creating new collection: {collection_name}")
     fields = [
         FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True),
         FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=2048),
         FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=256),
         FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=4096)
     ]
-    schema = CollectionSchema(fields, description="All PDFs collection for RAG Blueprint")
+    schema = CollectionSchema(fields, description="New PDFs collection for RAG Blueprint - Fresh Ingestion")
     
     collection = Collection(name=collection_name, schema=schema)
     
@@ -39,7 +40,7 @@ def create_all_pdfs_collection():
         "params": {"nlist": 128}
     }
     collection.create_index(field_name="vector", index_params=index_params)
-    print("Created collection and index")
+    print("✅ Created collection and index")
     
     return collection
 
@@ -52,7 +53,7 @@ def extract_text_from_pdf(pdf_path):
         doc.close()
         return text.strip()
     except Exception as e:
-        print("Error extracting text from", pdf_path, ":", e)
+        print(f"❌ Error extracting text from {pdf_path}: {e}")
         return None
 
 def generate_simple_embedding(text):
@@ -66,8 +67,8 @@ def ingest_pdf(pdf_path, collection, batch_size=100):
     if not text:
         return False
     
-        # Truncate text to fit Milvus VARCHAR max_length (leaving buffer)
-        text = text[:3500]
+    # Truncate text to fit Milvus VARCHAR max_length (leaving buffer)
+    text = text[:3500]
     embedding = generate_simple_embedding(text)
     
     data = [
@@ -80,30 +81,32 @@ def ingest_pdf(pdf_path, collection, batch_size=100):
         collection.insert(data)
         return True
     except Exception as e:
-        print(f"Failed to ingest {filename}: {e}")
+        print(f"❌ Failed to ingest {filename}: {e}")
         return False
 
 def main():
-    print("=== Ingesting All Available PDFs ===")
+    print("🚀 === Starting Fresh PDF Ingestion ===")
+    print(f"⏰ Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     if not connect_to_milvus():
         return
     
-    collection = create_all_pdfs_collection()
+    collection = create_new_pdfs_collection()
     
     # Process both directories
     pdf_dirs = ["/data/pdf-test", "/data/pdfs"]
     total_processed = 0
     total_successful = 0
     batch_count = 0
+    start_time = time.time()
     
     for pdf_dir in pdf_dirs:
         if not os.path.exists(pdf_dir):
-            print(f"Directory not found: {pdf_dir}")
+            print(f"⚠️  Directory not found: {pdf_dir}")
             continue
             
         pdf_files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
-        print(f"Processing {len(pdf_files)} PDFs from {pdf_dir}")
+        print(f"📁 Processing {len(pdf_files)} PDFs from {pdf_dir}")
         
         for i, pdf_file in enumerate(pdf_files):
             pdf_path = os.path.join(pdf_dir, pdf_file)
@@ -111,19 +114,31 @@ def main():
                 total_successful += 1
             total_processed += 1
             
+            # Progress update every 10 files
+            if total_processed % 10 == 0:
+                elapsed = time.time() - start_time
+                rate = total_processed / elapsed if elapsed > 0 else 0
+                print(f"📊 Progress: {total_processed:,} files processed, {total_successful:,} successful | Rate: {rate:.1f} files/sec")
+            
             # Flush every 100 documents
             if total_processed % 100 == 0:
                 collection.flush()
-                print(f"Processed {total_processed} files, {total_successful} successful")
+                print(f"💾 Flushed batch at {total_processed:,} files")
     
-    # Final flush
+    # Final flush and load
     collection.flush()
     collection.load()
     
-    print("=== Final Ingestion Summary ===")
-    print("Total processed:", total_processed, "files")
-    print("Total successful:", total_successful, "files")
-    print("Collection entities:", collection.num_entities)
+    elapsed_time = time.time() - start_time
+    
+    print("\n🎉 === Final Ingestion Summary ===")
+    print(f"⏰ Total time: {elapsed_time:.1f} seconds")
+    print(f"📊 Total processed: {total_processed:,} files")
+    print(f"✅ Total successful: {total_successful:,} files")
+    print(f"📈 Success rate: {(total_successful/total_processed)*100:.1f}%")
+    print(f"⚡ Average rate: {total_processed/elapsed_time:.1f} files/sec")
+    print(f"🗄️  Collection entities: {collection.num_entities:,}")
+    print(f"🏁 End time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,291 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-genai-perf
+  namespace: default
+  labels:
+    app: triton-genai-perf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton-genai-perf
+  template:
+    metadata:
+      labels:
+        app: triton-genai-perf
+    spec:
+      containers:
+      - name: triton-genai-perf
+        image: nvcr.io/nvidia/tritonserver:24.10-py3
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 8001
+          name: grpc
+        - containerPort: 8002
+          name: metrics
+        env:
+        - name: TRITON_SERVER_HTTP_PORT
+          value: "8000"
+        - name: TRITON_SERVER_GRPC_PORT
+          value: "8001"
+        - name: TRITON_SERVER_METRICS_PORT
+          value: "8002"
+        - name: TRITON_SERVER_MODEL_REPOSITORY
+          value: "/models"
+        - name: TRITON_SERVER_ALLOW_HTTP
+          value: "true"
+        - name: TRITON_SERVER_ALLOW_GRPC
+          value: "true"
+        - name: TRITON_SERVER_ALLOW_METRICS
+          value: "true"
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            echo "🚀 Setting up Triton Inference Server with genai-perf..."
+            
+            # Create NIM Perf data directory structure
+            echo "📁 Setting up NIM Perf data directory..."
+            mkdir -p /nim-perf-data/{models,configs,results,logs}
+            echo "✅ NIM Perf directories created:"
+            echo "   - /nim-perf-data/models/     (for model files)"
+            echo "   - /nim-perf-data/configs/    (for test configurations)"
+            echo "   - /nim-perf-data/results/    (for test results)"
+            echo "   - /nim-perf-data/logs/       (for performance logs)"
+            
+            # Install Triton client and dependencies
+            pip install tritonclient[all] requests numpy
+            
+            # Download and build genai-perf from the official repository
+            echo "📥 Downloading genai-perf from Triton client repository..."
+            cd /tmp
+            git clone --branch r24.03 https://github.com/triton-inference-server/client.git triton-client
+            cd triton-client/src/c++/perf_analyzer/genai-perf
+            
+            # Build genai-perf
+            echo "🔨 Building genai-perf..."
+            mkdir -p build && cd build
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            make -j$(nproc)
+            
+            # Copy the built binary to a system path
+            cp genai-perf /usr/local/bin/
+            
+            # Create a test model repository for NIM testing
+            echo "📁 Creating test model repository..."
+            mkdir -p /models/nim_test/1
+            
+            # Create model configuration
+            cat > /models/nim_test/config.pbtxt << 'EOF'
+            name: "nim_test"
+            platform: "python"
+            max_batch_size: 8
+            input [
+              {
+                name: "prompt"
+                data_type: TYPE_STRING
+                dims: [ -1 ]
+              },
+              {
+                name: "max_tokens"
+                data_type: TYPE_INT32
+                dims: [ 1 ]
+              }
+            ]
+            output [
+              {
+                name: "generated_text"
+                data_type: TYPE_STRING
+                dims: [ -1 ]
+              },
+              {
+                name: "tokens_per_second"
+                data_type: TYPE_FP32
+                dims: [ 1 ]
+              },
+              {
+                name: "time_to_first_token"
+                data_type: TYPE_FP32
+                dims: [ 1 ]
+              }
+            ]
+            instance_group [
+              {
+                count: 1
+                kind: KIND_GPU
+                gpus: [ 0 ]
+              }
+            ]
+            EOF
+            
+            # Create a Python model that simulates NIM behavior
+            cat > /models/nim_test/1/model.py << 'EOF'
+            import triton_python_backend_utils as pb_utils
+            import numpy as np
+            import time
+            import json
+            import random
+
+            class NIMTestModel:
+                def initialize(self, args):
+                    self.model_config = json.loads(args['model_config'])
+                    
+                    # Configure token generation parameters
+                    self.base_tokens_per_second = 50.0  # Base throughput
+                    self.base_ttft = 0.1  # Base time to first token (100ms)
+                    self.variance = 0.2  # 20% variance for realistic testing
+                    
+                    print(f"🚀 NIM Test Model initialized with {self.base_tokens_per_second} tokens/sec base rate")
+
+                def execute(self, requests):
+                    responses = []
+                    for request in requests:
+                        # Get input tensors
+                        prompt = pb_utils.get_input_tensor_by_name(request, "prompt")
+                        max_tokens = pb_utils.get_input_tensor_by_name(request, "max_tokens")
+                        
+                        prompt_text = prompt.as_numpy()[0].decode('utf-8')
+                        max_tokens_val = max_tokens.as_numpy()[0]
+                        
+                        # Simulate realistic token generation
+                        start_time = time.time()
+                        
+                        # Time to first token (with some variance)
+                        ttft = self.base_ttft * (1 + random.uniform(-self.variance, self.variance))
+                        time.sleep(ttft)
+                        
+                        first_token_time = time.time()
+                        
+                        # Generate tokens with realistic throughput
+                        tokens_per_second = self.base_tokens_per_second * (1 + random.uniform(-self.variance, self.variance))
+                        tokens_to_generate = min(max_tokens_val, len(prompt_text.split()) * 2)  # Generate up to 2x input length
+                        
+                        # Simulate token generation time
+                        generation_time = tokens_to_generate / tokens_per_second
+                        time.sleep(generation_time)
+                        
+                        end_time = time.time()
+                        
+                        # Create output text (simulate generated content)
+                        generated_text = f"Generated response for: {prompt_text[:50]}... [Generated {tokens_to_generate} tokens]"
+                        
+                        # Create output tensors
+                        output_text = pb_utils.Tensor("generated_text", 
+                                                    np.array([generated_text.encode('utf-8')], dtype=object))
+                        output_tps = pb_utils.Tensor("tokens_per_second", 
+                                                    np.array([tokens_per_second], dtype=np.float32))
+                        output_ttft = pb_utils.Tensor("time_to_first_token", 
+                                                     np.array([ttft], dtype=np.float32))
+                        
+                        response = pb_utils.InferenceResponse(output_tensors=[output_text, output_tps, output_ttft])
+                        responses.append(response)
+                        
+                        print(f"📊 Generated {tokens_to_generate} tokens at {tokens_per_second:.1f} tokens/sec, TTFT: {ttft:.3f}s")
+                    
+                    return responses
+
+                def finalize(self):
+                    pass
+            EOF
+            
+            echo "🚀 Starting Triton Server..."
+            tritonserver --model-repository=/models --allow-http=true --allow-grpc=true --allow-metrics=true &
+            TRITON_PID=$!
+            
+            # Wait for server to start
+            echo "⏳ Waiting for Triton server to start..."
+            sleep 15
+            
+            # Test server health
+            echo "🔍 Testing server health..."
+            curl -s http://localhost:8000/v2/health/ready || echo "Server not ready yet, waiting..."
+            sleep 5
+            
+            # Run genai-perf tests
+            echo "🧪 Running genai-perf performance tests..."
+            
+            # Create test configuration and save to NFS mount
+            cat > /nim-perf-data/configs/test_config.json << 'EOF'
+            {
+              "model_name": "nim_test",
+              "model_version": "1",
+              "protocol": "http",
+              "url": "localhost:8000",
+              "concurrency": 10,
+              "sequence_length": 100,
+              "max_tokens": 50,
+              "warmup_requests": 5,
+              "measurement_requests": 50,
+              "measurement_window_ms": 10000,
+              "request_rate": 0,
+              "input_data": [
+                "What is the capital of France?",
+                "Explain quantum computing in simple terms.",
+                "Write a short story about a robot.",
+                "How does machine learning work?",
+                "Describe the benefits of renewable energy."
+              ]
+            }
+            EOF
+            
+            # Run genai-perf with the test configuration
+            echo "📊 Starting genai-perf test..."
+            genai-perf -m nim_test -u localhost:8000 -i grpc -c 10 -s 100 --max-tokens 50 --warmup 5 --measurement-requests 50 --measurement-interval 10000 --input-data /nim-perf-data/configs/test_config.json --results-file /nim-perf-data/results/nim_perf_results.json
+            
+            echo "✅ genai-perf test completed!"
+            echo "🔧 Triton server is running and ready for additional tests."
+            echo "📊 Access metrics at: http://localhost:8002/metrics"
+            echo "🌐 HTTP API at: http://localhost:8000"
+            echo "🔌 gRPC API at: localhost:8001"
+            
+            # Keep container running for interactive use
+            wait $TRITON_PID
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "4"
+            memory: "8Gi"
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        - name: nim-perf-data
+          mountPath: /nim-perf-data
+      volumes:
+      - name: models
+        emptyDir: {}
+      - name: nim-perf-data
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triton-genai-perf-service
+  namespace: default
+  labels:
+    app: triton-genai-perf
+spec:
+  type: NodePort
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30800
+    name: http
+  - port: 8001
+    targetPort: 8001
+    nodePort: 30801
+    name: grpc
+  - port: 8002
+    targetPort: 8002
+    nodePort: 30802
+    name: metrics
+  selector:
+    app: triton-genai-perf

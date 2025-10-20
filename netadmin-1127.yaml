@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netadmin-1127
+  namespace: default
+spec:
+  hostNetwork: true
+  hostPID: true
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251010-1127
+  containers:
+  - name: netadmin
+    image: nicolaka/netshoot
+    securityContext:
+      privileged: true
+    command: ['sh','-lc','sleep 3600']

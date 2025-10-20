@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: milvus-mcp-wrapper
+  namespace: default
+  labels:
+    app: milvus-mcp-wrapper
+spec:
+  restartPolicy: Always
+  containers:
+  - name: milvus-mcp-wrapper
+    image: python:3.11-slim
+    ports:
+    - containerPort: 8000
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing system packages..."
+        apt-get update && apt-get install -y git
+        echo "Installing Python packages..."
+        pip install --upgrade pip
+        pip install uv fastapi uvicorn
+        echo "Cloning Milvus MCP Server..."
+        git clone https://github.com/zilliztech/mcp-server-milvus.git /app/mcp-server-milvus
+        cd /app/mcp-server-milvus
+        echo "Installing MCP Server dependencies..."
+        uv sync
+        echo "Copying MCP wrapper..."
+        cp /scripts/mcp_wrapper.py /app/mcp_wrapper.py
+        echo "Starting MCP wrapper server..."
+        python /app/mcp_wrapper.py
+    env:
+    - name: MILVUS_URI
+      value: "http://milvus-external-etcd-clean:19530"
+    - name: PYTHONPATH
+      value: "/app/mcp-server-milvus"
+    volumeMounts:
+    - name: script-volume
+      mountPath: /scripts
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+  volumes:
+  - name: script-volume
+    configMap:
+      name: mcp-wrapper-script
+      defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-mcp-wrapper-service
+  namespace: default
+spec:
+  selector:
+    app: milvus-mcp-wrapper
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-wrapper-script
+  namespace: default
+data:
+  mcp_wrapper.py: |
+    import asyncio
+    import subprocess
+    import json
+    import logging
+    from fastapi import FastAPI, HTTPException
+    from pydantic import BaseModel
+    import uvicorn
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    app = FastAPI(title="Milvus MCP Wrapper")
+
+    class MCPRequest(BaseModel):
+        method: str
+        params: dict = {}
+
+    class MCPResponse(BaseModel):
+        result: dict = {}
+        error: str = None
+
+    async def call_mcp_server(method: str, params: dict = {}):
+        """Call the Milvus MCP server via stdio"""
+        try:
+            # Start the MCP server process
+            process = await asyncio.create_subprocess_exec(
+                "uv", "run", "src/mcp_server_milvus/server.py", 
+                "--milvus-uri", "http://milvus-external-etcd-clean:19530",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd="/app/mcp-server-milvus"
+            )
+            
+            # First, initialize the MCP server
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "milvus-mcp-wrapper",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            
+            # Send initialization
+            init_json = json.dumps(init_request) + "\n"
+            process.stdin.write(init_json.encode())
+            await process.stdin.drain()
+            
+            # Read initialization response
+            init_response_line = await process.stdout.readline()
+            init_response = json.loads(init_response_line.decode().strip())
+            
+            if "error" in init_response:
+                return {"error": f"Initialization failed: {init_response['error']}"}
+            
+            # Now send the actual request
+            request = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": method,
+                "params": params
+            }
+            
+            request_json = json.dumps(request) + "\n"
+            process.stdin.write(request_json.encode())
+            await process.stdin.drain()
+            
+            # Read response
+            response_line = await process.stdout.readline()
+            response = json.loads(response_line.decode().strip())
+            
+            # Close the process
+            process.stdin.close()
+            await process.wait()
+            
+            if "error" in response:
+                return {"error": response["error"]}
+            return response.get("result", {})
+                
+        except Exception as e:
+            logger.error(f"Error calling MCP server: {e}")
+            return {"error": str(e)}
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy", "service": "milvus-mcp-wrapper"}
+
+    @app.get("/mcp/tools")
+    async def get_tools():
+        """Get available MCP tools"""
+        result = await call_mcp_server("tools/list")
+        return result
+
+    @app.get("/mcp/collections")
+    async def get_collections():
+        """Get Milvus collections"""
+        result = await call_mcp_server("tools/call", {
+            "name": "list_collections",
+            "arguments": {}
+        })
+        return result
+
+    @app.post("/mcp/search")
+    async def search_vectors(request: dict):
+        """Search vectors in Milvus"""
+        result = await call_mcp_server("tools/call", {
+            "name": "search",
+            "arguments": request
+        })
+        return result
+
+    @app.get("/")
+    async def root():
+        return {
+            "service": "Milvus MCP Wrapper",
+            "endpoints": [
+                "/health",
+                "/mcp/tools", 
+                "/mcp/collections",
+                "/mcp/search"
+            ]
+        }
+
+    if __name__ == "__main__":
+        uvicorn.run(app, host="0.0.0.0", port=8000)

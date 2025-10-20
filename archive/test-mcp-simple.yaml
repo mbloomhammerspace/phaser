@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-mcp-simple
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-simple
+    image: python:3.11-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "=== MCP Test Framework Starting ==="
+        pip install requests
+        echo "Testing greetings and MCP queries..."
+        
+        # Test 1: Simple greeting
+        echo "Test 1: Simple greeting 'hey'"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"hey"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 10
+        
+        echo -e "\n\nTest 2: Another greeting 'hello'"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"hello"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 10
+        
+        echo -e "\n\nTest 3: MCP Query - Document count (natural language)"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"How many documents are in the vector database?"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 15
+        
+        echo -e "\n\nTest 4: MCP Query - Record count (alternative phrasing)"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"How many records are there in the vector database?"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 15
+        
+        echo -e "\n\nTest 5: MCP Query - Milvus instance"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"How many documents are in the Milvus instance?"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 15
+        
+        echo -e "\n\nTest 6: MCP Query - Collections"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"What collections are available in Milvus?"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 15
+        
+        echo -e "\n\nTest 7: Short query 'hi'"
+        curl -X POST http://rag-server:8081/v1/generate \
+          -H "Content-Type: application/json" \
+          -d '{"messages":[{"role":"user","content":"hi"}],"collection_names":["hammerspace_docs"],"use_knowledge_base":true}' \
+          --max-time 5
+        
+        echo -e "\n\n=== Test Framework Complete ==="

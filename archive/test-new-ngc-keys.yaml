@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-new-ngc-keys
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-docker
+    image: docker:27-dind
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🔐 Testing New NGC API Keys..."
+        echo "======================================================"
+        
+        # Start Docker daemon
+        dockerd &
+        sleep 8
+        
+        # Test Key 1
+        KEY1="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"
+        KEY2="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"
+        
+        echo ""
+        echo "🔑 Testing KEY 1..."
+        echo "$KEY1" | docker login nvcr.io -u '\$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ KEY 1: Login successful!"
+            echo ""
+            echo "📦 Testing image pull with KEY 1..."
+            
+            # Test pulling NIM LLM image
+            docker pull nvcr.io/nim/meta/llama-3.1-8b-instruct:1.2.2
+            KEY1_LLM_RESULT=$?
+            
+            # Test pulling Blueprint image
+            docker pull nvcr.io/nvidia/blueprint/rag-playground:2.2.0
+            KEY1_BLUEPRINT_RESULT=$?
+            
+            if [ $KEY1_LLM_RESULT -eq 0 ] || [ $KEY1_BLUEPRINT_RESULT -eq 0 ]; then
+                echo "✅ KEY 1 HAS WORKING ENTITLEMENTS!"
+                echo "   LLM pull: $([ $KEY1_LLM_RESULT -eq 0 ] && echo 'SUCCESS' || echo 'FAILED')"
+                echo "   Blueprint pull: $([ $KEY1_BLUEPRINT_RESULT -eq 0 ] && echo 'SUCCESS' || echo 'FAILED')"
+                exit 0
+            fi
+        else
+            echo "❌ KEY 1: Login failed!"
+        fi
+        
+        # Logout and test Key 2
+        docker logout nvcr.io
+        
+        echo ""
+        echo "======================================================"
+        echo "🔑 Testing KEY 2..."
+        echo "$KEY2" | docker login nvcr.io -u '\$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ KEY 2: Login successful!"
+            echo ""
+            echo "📦 Testing image pull with KEY 2..."
+            
+            # Test pulling NIM LLM image
+            docker pull nvcr.io/nim/meta/llama-3.1-8b-instruct:1.2.2
+            KEY2_LLM_RESULT=$?
+            
+            # Test pulling Blueprint image
+            docker pull nvcr.io/nvidia/blueprint/rag-playground:2.2.0
+            KEY2_BLUEPRINT_RESULT=$?
+            
+            if [ $KEY2_LLM_RESULT -eq 0 ] || [ $KEY2_BLUEPRINT_RESULT -eq 0 ]; then
+                echo "✅ KEY 2 HAS WORKING ENTITLEMENTS!"
+                echo "   LLM pull: $([ $KEY2_LLM_RESULT -eq 0 ] && echo 'SUCCESS' || echo 'FAILED')"
+                echo "   Blueprint pull: $([ $KEY2_BLUEPRINT_RESULT -eq 0 ] && echo 'SUCCESS' || echo 'FAILED')"
+                exit 0
+            fi
+        else
+            echo "❌ KEY 2: Login failed!"
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "❌ BOTH KEYS FAILED TO PULL IMAGES"
+        echo "======================================================"
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+      requests:
+        memory: 2Gi
+        cpu: 1

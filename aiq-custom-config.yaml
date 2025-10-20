@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiq-custom-config
+  labels:
+    app.kubernetes.io/name: aiq-research-assistant
+    app.kubernetes.io/component: config
+data:
+  hosted-config.yml: |
+    general:
+      use_uvloop: true
+      front_end:
+        _type: fastapi
+        endpoints:
+          - path: /generate_query
+            method: POST
+            description: Creates the query
+            function_name: generate_query
+          - path: /generate_summary
+            method: POST
+            description: Generates the summary
+            function_name: generate_summary
+          - path: /artifact_qa
+            method: POST
+            description: Q/A or chat about a previously generated artifact
+            function_name: artifact_qa
+          - path: /aiqhealth
+            method: GET
+            description: Health check for the AIQ AIRA service
+            function_name: health_check
+          - path: /default_collections
+            method: GET
+            description: Get the default collections
+            function_name: default_collections
+
+    llms:
+      # The inst_llm is used for Q&A and report writing and should be an instruct model.
+      instruct_llm:
+        _type: openai
+        model_name: meta/llama-3.3-70b-instruct
+        temperature: 0.0
+        base_url: http://nim-llm:8000/v1
+        
+      # The reasoning llm is used for report planning and reflection and should be a reasoning model
+      nemotron:
+        _type: openai
+        model_name : nvidia/llama-3.3-nemotron-super-49b-v1
+        temperature: 0.5
+        base_url: http://nim-llm:8000/v1
+        max_tokens: 5000
+        stream: true
+      
+
+    functions:
+      generate_query:
+        _type: generate_queries
+
+      generate_summary:
+        _type: generate_summaries
+        # update to the IP address of the RAG server if you are not deploying RAG with docker compose
+        rag_url: http://rag-server:8081/v1 
+
+      artifact_qa:
+        _type: artifact_qa
+        llm_name: instruct_llm
+        # update to the IP address of the RAG server if you are not deploying RAG with docker compose
+        rag_url: http://rag-server:8081/v1
+      
+      health_check:
+        _type: health_check
+
+      default_collections:
+        _type: default_collections
+        collections:
+          - name: "test_folder_2_1760589751"
+            topic: "PDF Documents"
+            report_organization: "You are a research analyst. Create a comprehensive report analyzing the content of the uploaded PDF documents. Include a 150-200 word abstract and organize your findings into methods, results, and discussion sections. Format your answer in paragraphs. Consider all (and only) relevant data from the documents. Give a factual report with cited sources."
+
+    workflow:
+      _type: ai_researcher

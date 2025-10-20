@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-playground-mcp-build
+  namespace: default
+data:
+  build.tar.gz: |
+    # This will be populated with the actual build files
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rag-playground-mcp-deployment
+  namespace: default
+  labels:
+    app: rag-playground-mcp
+spec:
+  restartPolicy: Always
+  containers:
+  - name: playground-mcp
+    image: node:18-alpine
+    ports:
+    - containerPort: 3000
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing dependencies..."
+        apk add --no-cache curl
+        npm install -g serve
+        
+        echo "Extracting build files..."
+        cd /tmp
+        tar -xzf /config/build.tar.gz
+        
+        echo "Starting production server with MCP toggle..."
+        echo "🔌 MCP Services toggle is now available!"
+        npx serve -s . -l 3000 --single
+    volumeMounts:
+    - name: build-volume
+      mountPath: /config
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    env:
+    - name: NODE_ENV
+      value: "production"
+    - name: MCP_TOGGLE_ENABLED
+      value: "true"
+  volumes:
+  - name: build-volume
+    configMap:
+      name: rag-playground-mcp-build
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-playground-mcp-service
+  namespace: default
+spec:
+  selector:
+    app: rag-playground-mcp
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30082
+    protocol: TCP
+  type: NodePort

@@ -1,0 +1,17 @@
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+  replicaCount: 3  # Use multiple for parallel processing
+  model:
+    ngcAPIKey: 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
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-test-same-node
+  namespace: default
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: instance-20251010-1127
+  containers:
+  - name: dns-test
+    image: busybox
+    command: ['sleep', '300']
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"

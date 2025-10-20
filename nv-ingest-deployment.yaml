@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-nv-ingest
+  namespace: default
+  labels:
+    app: rag-nv-ingest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-nv-ingest
+  template:
+    metadata:
+      labels:
+        app: rag-nv-ingest
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251010-1127
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: nv-ingest
+        image: nvcr.io/nvidia/nemo-microservices/nv-ingest:25.6.2
+        ports:
+        - containerPort: 7670
+        env:
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: NGC_API_KEY
+          value: "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"
+        - name: MESSAGE_CLIENT_HOST
+          value: "rag-redis-master"
+        - name: MESSAGE_CLIENT_PORT
+          value: "6379"
+        - name: MESSAGE_CLIENT_TYPE
+          value: "redis"
+        - name: REDIS_HOST
+          value: "rag-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "32Gi"
+            cpu: "8"
+          requests:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-nv-ingest
+  namespace: default
+spec:
+  selector:
+    app: rag-nv-ingest
+  ports:
+  - port: 7670
+    targetPort: 7670
+  type: ClusterIP

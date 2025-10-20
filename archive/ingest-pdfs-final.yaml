@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-pdfs-final-script
+data:
+  ingest.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import time
+    import requests
+    from pathlib import Path
+    
+    INGESTOR_URL = "http://ingestor-server:8082/v1"
+    COLLECTION = "pdf_test_docs"
+    PDF_DIR = "/mnt/pdf-test"
+    
+    print(f"🚀 Starting PDF ingestion with full Blueprint pipeline")
+    print(f"Collection: {COLLECTION}")
+    print(f"Source: {PDF_DIR}\n")
+    
+    # List PDFs
+    pdfs = sorted([f for f in os.listdir(PDF_DIR) if f.lower().endswith('.pdf')])
+    total = len(pdfs)
+    print(f"📂 Found {total} PDFs\n")
+    
+    success = 0
+    failed = 0
+    
+    for idx, filename in enumerate(pdfs, 1):
+        filepath = os.path.join(PDF_DIR, filename)
+        print(f"[{idx}/{total}] {filename}")
+        
+        try:
+            with open(filepath, 'rb') as f:
+                files = {'documents': (filename, f, 'application/pdf')}
+                data = {'collection_name': COLLECTION}
+                
+                r = requests.post(
+                    f"{INGESTOR_URL}/documents",
+                    files=files,
+                    data={'data': str(data)},
+                    timeout=300
+                )
+                
+                if r.status_code in [200, 201, 202]:
+                    result = r.json()
+                    if 'task_id' in result:
+                        print(f"  ✅ Queued: {result['task_id'][:12]}...")
+                    else:
+                        print(f"  ✅ Uploaded")
+                    success += 1
+                else:
+                    print(f"  ❌ Failed: {r.status_code} - {r.text[:100]}")
+                    failed += 1
+                    
+        except Exception as e:
+            print(f"  ❌ Error: {str(e)[:80]}")
+            failed += 1
+        
+        time.sleep(0.5)
+    
+    print(f"\n{'='*70}")
+    print(f"📊 Upload Summary: ✅ {success} | ❌ {failed}")
+    print(f"\n⏳ Documents are now being processed asynchronously...")
+    print(f"   Check collection in 2-3 minutes for results.")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-pdfs-final
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: ingest
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            apt-get update -qq && apt-get install -y -qq dnsutils iputils-ping curl > /dev/null 2>&1
+            pip install requests --quiet
+            python3 /app/ingest.py
+        volumeMounts:
+        - name: script
+          mountPath: /app
+        - name: pdfs
+          mountPath: /mnt
+      volumes:
+      - name: script
+        configMap:
+          name: ingest-pdfs-final-script
+      - name: pdfs
+        persistentVolumeClaim:
+          claimName: blueprint-storage

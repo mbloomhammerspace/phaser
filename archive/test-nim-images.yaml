@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-nim-images
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-docker
+    image: docker:27-dind
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🔐 Testing NGC Authentication and NIM Image Pulls..."
+        echo "======================================================"
+        
+        # Start Docker daemon
+        dockerd &
+        sleep 8
+        
+        # NGC credentials
+        NGC_KEY="g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        
+        # Test authentication
+        echo ""
+        echo "🔑 Step 1: Testing NGC login..."
+        echo "$NGC_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ NGC authentication successful!"
+        else
+            echo "❌ NGC authentication failed!"
+            exit 1
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "🐳 Step 2: Testing NIM Image Pulls..."
+        echo "======================================================"
+        echo ""
+        
+        # Test 1: NIM LLM Image
+        echo "📦 Test 1: Pulling NIM LLM image..."
+        echo "   Image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.2.2"
+        docker pull nvcr.io/nim/meta/llama-3.1-8b-instruct:1.2.2
+        LLM_RESULT=$?
+        
+        echo ""
+        
+        # Test 2: NIM Embedding Image  
+        echo "📦 Test 2: Pulling NIM Embedding image..."
+        echo "   Image: nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1"
+        docker pull nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1
+        EMBED_RESULT=$?
+        
+        echo ""
+        
+        # Test 3: Try blueprint image with different tag
+        echo "📦 Test 3: Pulling Blueprint image (latest tag)..."
+        echo "   Image: nvcr.io/nvidia/blueprint/rag-playground:latest"
+        docker pull nvcr.io/nvidia/blueprint/rag-playground:latest
+        BLUEPRINT_RESULT=$?
+        
+        echo ""
+        echo "======================================================"
+        echo "📊 Test Results Summary:"
+        echo "======================================================"
+        
+        if [ $LLM_RESULT -eq 0 ]; then
+            echo "✅ NIM LLM Image: SUCCESS"
+        else
+            echo "❌ NIM LLM Image: FAILED"
+        fi
+        
+        if [ $EMBED_RESULT -eq 0 ]; then
+            echo "✅ NIM Embedding Image: SUCCESS"
+        else
+            echo "❌ NIM Embedding Image: FAILED"
+        fi
+        
+        if [ $BLUEPRINT_RESULT -eq 0 ]; then
+            echo "✅ Blueprint Image: SUCCESS"
+        else
+            echo "❌ Blueprint Image: FAILED"
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "Test complete."
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+      requests:
+        memory: 2Gi
+        cpu: 1

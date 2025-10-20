@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-pdfs-blueprint-script
+data:
+  ingest.py: |
+    #!/usr/bin/env python3
+    import os
+    import sys
+    import time
+    import hashlib
+    import requests
+    
+    INGESTOR_URL = "http://ingestor-server:8082/v1"
+    COLLECTION_NAME = "pdf_test_docs"
+    PDF_DIR = "/mnt/pdf-test"
+    
+    def check_health():
+        try:
+            r = requests.get(f"{INGESTOR_URL}/health", timeout=10)
+            print(f"✅ Ingestor healthy: {r.status_code}")
+            return r.status_code == 200
+        except Exception as e:
+            print(f"❌ Ingestor unavailable: {e}")
+            return False
+    
+    def create_collection():
+        try:
+            payload = {"collection_name": COLLECTION_NAME}
+            r = requests.post(f"{INGESTOR_URL}/collections", json=payload, timeout=30)
+            print(f"Collection creation: {r.status_code}")
+        except Exception as e:
+            print(f"Collection: {e}")
+    
+    def calculate_hash(filepath):
+        sha256 = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    
+    def ingest_pdf(pdf_path, filename):
+        try:
+            with open(pdf_path, 'rb') as f:
+                files = {'documents': (filename, f, 'application/pdf')}
+                data = {'data': f'{{"collection_name": "{COLLECTION_NAME}"}}'}
+                
+                r = requests.post(f"{INGESTOR_URL}/documents", files=files, data=data, timeout=300)
+                
+                if r.status_code in [200, 201, 202]:
+                    print(f"  ✅ Ingested")
+                    return True
+                else:
+                    print(f"  ❌ Failed: {r.status_code}")
+                    return False
+        except Exception as e:
+            print(f"  ❌ Error: {str(e)[:80]}")
+            return False
+    
+    def main():
+        print(f"🚀 NVIDIA Blueprint Ingestion")
+        print(f"Collection: {COLLECTION_NAME}")
+        print(f"Source: {PDF_DIR}\n")
+        
+        if not check_health():
+            sys.exit(1)
+        
+        create_collection()
+        
+        pdfs = sorted([f for f in os.listdir(PDF_DIR) if f.lower().endswith('.pdf')])
+        total = len(pdfs)
+        print(f"\n📂 Found {total} PDFs\n{'='*70}")
+        
+        success = 0
+        failed = 0
+        seen = set()
+        
+        for idx, filename in enumerate(pdfs, 1):
+            filepath = os.path.join(PDF_DIR, filename)
+            print(f"\n[{idx}/{total}] {filename}")
+            
+            file_hash = calculate_hash(filepath)
+            if file_hash in seen:
+                print(f"  ⏭️  DUPLICATE")
+                continue
+            seen.add(file_hash)
+            
+            size = os.path.getsize(filepath)
+            print(f"  📏 {size/1024:.1f} KB")
+            
+            if ingest_pdf(filepath, filename):
+                success += 1
+            else:
+                failed += 1
+            
+            time.sleep(0.5)
+        
+        print(f"\n{'='*70}")
+        print(f"📊 Summary: ✅ {success} | ❌ {failed} | Total: {total}")
+        print(f"✅ Complete!")
+    
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-pdfs-blueprint
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: ingest
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install requests --quiet
+            python3 /app/ingest.py
+        volumeMounts:
+        - name: script
+          mountPath: /app
+        - name: pdfs
+          mountPath: /mnt
+      volumes:
+      - name: script
+        configMap:
+          name: ingest-pdfs-blueprint-script
+      - name: pdfs
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+

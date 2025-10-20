@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-blueprint-config
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: blueprint-test
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== TESTING WITH CORRECT BLUEPRINT CONFIGURATION ==="
+          echo ""
+          echo "✅ CORRECT CONFIGURATION DEPLOYED:"
+          echo "  • Redis service: redis (not rag-redis-master)"
+          echo "  • NV ingest service: nv-ingest-ms-runtime (not rag-nv-ingest)"
+          echo "  • Ingestor connects to: nv-ingest-ms-runtime:7670"
+          echo "  • NV ingest connects to: redis:6379"
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating blueprint test document..."
+          echo "Blueprint Configuration Test Document" > blueprint_test.txt
+          echo "" >> blueprint_test.txt
+          echo "This document tests the correct blueprint configuration" >> blueprint_test.txt
+          echo "with proper service names and connections." >> blueprint_test.txt
+          echo "" >> blueprint_test.txt
+          echo "Configuration Details:" >> blueprint_test.txt
+          echo "- Redis service: redis" >> blueprint_test.txt
+          echo "- NV ingest service: nv-ingest-ms-runtime" >> blueprint_test.txt
+          echo "- Ingestor-server → nv-ingest-ms-runtime:7670" >> blueprint_test.txt
+          echo "- nv-ingest-ms-runtime → redis:6379" >> blueprint_test.txt
+          echo "" >> blueprint_test.txt
+          echo "Expected Results:" >> blueprint_test.txt
+          echo "- Document should be processed successfully" >> blueprint_test.txt
+          echo "- Collection should show non-zero entity count" >> blueprint_test.txt
+          echo "- Vectors should be stored in Milvus" >> blueprint_test.txt
+          echo "- Processing should complete without errors" >> blueprint_test.txt
+          echo ""
+          echo "Timestamp: $(date)" >> blueprint_test.txt
+          echo "✅ Blueprint test document created"
+          echo ""
+          echo "3. Creating blueprint_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "blueprint_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for blueprint configuration test..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@blueprint_test.txt" \
+            -F 'data={"collection_name": "blueprint_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. Waiting 120 seconds for processing..."
+            sleep 120
+            echo ""
+            echo "6. Checking blueprint collections status..."
+            curl -s http://10.233.51.201:8082/collections
+            echo ""
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "=== BLUEPRINT CONFIGURATION TEST COMPLETE ==="
+      restartPolicy: Never

@@ -1,0 +1,193 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-aiq-aira-nginx
+  labels:
+    app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+    app.kubernetes.io/component: aira-nginx
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.airaNginx.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+      app.kubernetes.io/component: aira-nginx
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+        app.kubernetes.io/component: aira-nginx
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.airaNginx.image.repository }}:{{ .Values.airaNginx.image.tag }}"
+          imagePullPolicy: {{ .Values.airaNginx.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8051
+          env:
+            - name: RAG_INGEST_URL
+              value: {{ .Values.airaNginx.env.RAG_INGEST_URL | quote }}
+            - name: AIRA_BASE_URL
+              value: {{ .Values.airaNginx.env.AIRA_BASE_URL | quote }}
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: {{ .Release.Name }}-aiq-aira-nginx
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-aiq-aira-nginx
+  labels:
+    app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+    app.kubernetes.io/component: aira-nginx
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  nginx.conf: |
+    events {}
+    http {
+      upstream aira_backend { server {{ .Values.airaNginx.env.AIRA_BASE_URL | trimPrefix "http://" }}; }
+      upstream aira_frontend { server {{ .Release.Name }}-aiq-frontend:{{ .Values.frontend.service.port }}; }
+      
+      server {
+        listen 8051;
+        
+            location /aira/ {
+              proxy_pass http://aira_backend/;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # API proxy routes for frontend - strip the prefix and route to backend
+            location /api/proxy/v2/protected/aiq/ {
+              rewrite ^/api/proxy/v2/protected/aiq/(.*)$ /$1 break;
+              proxy_pass http://aira_backend;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Handle v1 API routes that frontend expects
+            location /v1/collections {
+              proxy_pass http://aira_backend/default_collections;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Handle nested API proxy paths that frontend actually uses
+            location /api/proxy/v2/protected/aiq/v1/collections {
+              proxy_pass http://aira_backend/default_collections;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Handle logout endpoint that frontend expects (both GET and DELETE)
+            location /api/proxy/v2/predict/stateful/logout {
+              if ($request_method = DELETE) {
+                return 200 '{"status": "success", "message": "Logged out successfully"}';
+              }
+              if ($request_method = GET) {
+                return 200 '{"status": "success", "message": "Logged out successfully"}';
+              }
+              return 200 '{"status": "success", "message": "Logged out successfully"}';
+              add_header Content-Type application/json;
+            }
+            
+            # Handle other predict endpoints that frontend might expect
+            location /api/proxy/v2/predict/ {
+              return 200 '{"status": "success", "message": "Endpoint not implemented"}';
+              add_header Content-Type application/json;
+            }
+            
+            # Handle any other API endpoints that might be missing
+            location /api/ {
+              return 200 '{"status": "success", "message": "API endpoint not implemented"}';
+              add_header Content-Type application/json;
+            }
+            
+            # Handle favicon requests
+            location /favicon.ico {
+              return 204;
+            }
+            
+            # Handle well-known requests
+            location /.well-known/ {
+              return 204;
+            }
+            
+            location /v1/ {
+              rewrite ^/v1/(.*)$ /$1 break;
+              proxy_pass http://aira_backend;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        
+        location /rag/ {
+          proxy_pass {{ .Values.airaNginx.env.RAG_INGEST_URL }}/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Frontend expects /collections and /health, map to backend's /default_collections and /aiqhealth
+        location /collections {
+            proxy_pass http://aira_backend/default_collections;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        location /health {
+            proxy_pass http://aira_backend/aiqhealth;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        location / {
+          proxy_pass http://aira_frontend/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-aiq-aira-nginx
+  labels:
+    app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+    app.kubernetes.io/component: aira-nginx
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: {{ .Values.airaNginx.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
+    app.kubernetes.io/component: aira-nginx
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.airaNginx.service.port }}
+      targetPort: http

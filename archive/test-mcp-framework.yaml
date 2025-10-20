@@ -1,0 +1,253 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-mcp-framework
+  namespace: default
+  labels:
+    app: test-mcp-framework
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-framework
+    image: python:3.11-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "=== MCP Test Framework Starting ==="
+        pip install requests colorama
+        python3 -c '
+import requests
+import time
+import json
+from colorama import init, Fore, Style
+init()
+
+class MCPTestFramework:
+    def __init__(self):
+        self.rag_server_url = 'http://rag-server:8081/v1'
+        self.test_results = []
+        
+    def log(self, message, color=Fore.WHITE):
+        print(f'{color}{message}{Style.RESET_ALL}')
+        
+    def test_endpoint(self, name, payload, expected_keywords=None, timeout=30):
+        self.log(f'\\n🧪 Testing: {name}', Fore.CYAN)
+        self.log(f'📤 Payload: {json.dumps(payload, indent=2)}', Fore.YELLOW)
+        
+        start_time = time.time()
+        try:
+            response = requests.post(
+                f'{self.rag_server_url}/generate',
+                json=payload,
+                timeout=timeout,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            end_time = time.time()
+            response_time = end_time - start_time
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                
+                self.log(f'✅ Status: {response.status_code} | Time: {response_time:.2f}s', Fore.GREEN)
+                self.log(f'📝 Response: {content}', Fore.WHITE)
+                
+                # Check for expected keywords
+                if expected_keywords:
+                    found_keywords = [kw for kw in expected_keywords if kw.lower() in content.lower()]
+                    if found_keywords:
+                        self.log(f'🎯 Found expected keywords: {found_keywords}', Fore.GREEN)
+                    else:
+                        self.log(f'⚠️  Expected keywords not found: {expected_keywords}', Fore.YELLOW)
+                
+                self.test_results.append({
+                    'test': name,
+                    'status': 'PASS',
+                    'response_time': response_time,
+                    'content': content
+                })
+                return True
+                
+            else:
+                self.log(f'❌ Status: {response.status_code} | Time: {response_time:.2f}s', Fore.RED)
+                self.log(f'📝 Error: {response.text}', Fore.RED)
+                self.test_results.append({
+                    'test': name,
+                    'status': 'FAIL',
+                    'response_time': response_time,
+                    'error': response.text
+                })
+                return False
+                
+        except requests.exceptions.Timeout:
+            self.log(f'⏰ Timeout after {timeout}s', Fore.RED)
+            self.test_results.append({
+                'test': name,
+                'status': 'TIMEOUT',
+                'response_time': timeout
+            })
+            return False
+        except Exception as e:
+            self.log(f'💥 Exception: {e}', Fore.RED)
+            self.test_results.append({
+                'test': name,
+                'status': 'ERROR',
+                'error': str(e)
+            })
+            return False
+    
+    def run_all_tests(self):
+        self.log('🚀 Starting MCP Test Framework', Fore.MAGENTA)
+        self.log('=' * 60, Fore.MAGENTA)
+        
+        # Test 1: Simple Greeting
+        self.test_endpoint(
+            'Simple Greeting',
+            {
+                'messages': [{'role': 'user', 'content': 'hey'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['hello', 'assistant', 'help'],
+            timeout=10
+        )
+        
+        # Test 2: Another Greeting
+        self.test_endpoint(
+            'Another Greeting',
+            {
+                'messages': [{'role': 'user', 'content': 'hello'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['hello', 'assistant'],
+            timeout=10
+        )
+        
+        # Test 3: MCP Query - Document Count (Natural Language)
+        self.test_endpoint(
+            'MCP Query - Document Count (Natural)',
+            {
+                'messages': [{'role': 'user', 'content': 'How many documents are in the vector database?'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['documents', 'collection', 'hammerspace_docs'],
+            timeout=15
+        )
+        
+        # Test 4: MCP Query - Record Count (Alternative Phrasing)
+        self.test_endpoint(
+            'MCP Query - Record Count (Alternative)',
+            {
+                'messages': [{'role': 'user', 'content': 'How many records are there in the vector database?'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['records', 'documents', 'collection'],
+            timeout=15
+        )
+        
+        # Test 5: MCP Query - Milvus Instance
+        self.test_endpoint(
+            'MCP Query - Milvus Instance',
+            {
+                'messages': [{'role': 'user', 'content': 'How many documents are in the Milvus instance?'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['documents', 'Milvus', 'collection'],
+            timeout=15
+        )
+        
+        # Test 6: MCP Query - Collections
+        self.test_endpoint(
+            'MCP Query - List Collections',
+            {
+                'messages': [{'role': 'user', 'content': 'What collections are available in Milvus?'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['collections', 'available', 'Milvus'],
+            timeout=15
+        )
+        
+        # Test 7: Document Search (Should use direct Milvus, not MCP)
+        self.test_endpoint(
+            'Document Search (Direct Milvus)',
+            {
+                'messages': [{'role': 'user', 'content': 'Tell me about HammerSpace'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['HammerSpace', 'document', 'search'],
+            timeout=20
+        )
+        
+        # Test 8: Short Query (Should be fast)
+        self.test_endpoint(
+            'Short Query',
+            {
+                'messages': [{'role': 'user', 'content': 'hi'}],
+                'collection_names': ['hammerspace_docs'],
+                'use_knowledge_base': True
+            },
+            expected_keywords=['hello', 'assistant'],
+            timeout=5
+        )
+        
+        self.print_summary()
+    
+    def print_summary(self):
+        self.log('\\n' + '=' * 60, Fore.MAGENTA)
+        self.log('📊 TEST SUMMARY', Fore.MAGENTA)
+        self.log('=' * 60, Fore.MAGENTA)
+        
+        passed = len([r for r in self.test_results if r['status'] == 'PASS'])
+        failed = len([r for r in self.test_results if r['status'] in ['FAIL', 'ERROR', 'TIMEOUT']])
+        total = len(self.test_results)
+        
+        self.log(f'✅ Passed: {passed}/{total}', Fore.GREEN if passed == total else Fore.YELLOW)
+        self.log(f'❌ Failed: {failed}/{total}', Fore.RED if failed > 0 else Fore.GREEN)
+        
+        # Show response times
+        self.log('\\n⏱️  Response Times:', Fore.CYAN)
+        for result in self.test_results:
+            if 'response_time' in result:
+                status_icon = '✅' if result['status'] == 'PASS' else '❌'
+                self.log(f'  {status_icon} {result[\"test\"]}: {result[\"response_time\"]:.2f}s', 
+                        Fore.GREEN if result['status'] == 'PASS' else Fore.RED)
+        
+        # Show MCP-specific results
+        mcp_tests = [r for r in self.test_results if 'MCP' in r['test']]
+        if mcp_tests:
+            self.log('\\n🔌 MCP Test Results:', Fore.CYAN)
+            for result in mcp_tests:
+                status_icon = '✅' if result['status'] == 'PASS' else '❌'
+                self.log(f'  {status_icon} {result[\"test\"]}: {result[\"status\"]}', 
+                        Fore.GREEN if result['status'] == 'PASS' else Fore.RED)
+        
+        self.log('\\n🎯 Key Findings:', Fore.CYAN)
+        
+        # Check if MCP queries are working
+        mcp_passed = len([r for r in mcp_tests if r['status'] == 'PASS'])
+        if mcp_passed > 0:
+            self.log('  ✅ MCP integration is working for system queries', Fore.GREEN)
+        else:
+            self.log('  ❌ MCP integration is not working', Fore.RED)
+        
+        # Check response times
+        fast_tests = [r for r in self.test_results if r.get('response_time', 0) < 5]
+        if len(fast_tests) >= 2:
+            self.log('  ✅ Simple queries are responding quickly', Fore.GREEN)
+        else:
+            self.log('  ⚠️  Some queries are slow', Fore.YELLOW)
+        
+        self.log('\\n🏁 Test Framework Complete!', Fore.MAGENTA)
+
+# Run the test framework
+framework = MCPTestFramework()
+framework.run_all_tests()
+'
+        echo "=== Test Framework Complete ==="

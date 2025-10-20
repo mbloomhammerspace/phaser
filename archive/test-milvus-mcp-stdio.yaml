@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-milvus-mcp-stdio
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: mcp-tester
+    image: python:3.11-slim
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "Installing required packages..."
+        pip install requests
+        echo "Testing Milvus MCP Server stdio communication..."
+        python3 -c "
+import subprocess
+import json
+import sys
+
+def test_mcp_server():
+    print('Testing Milvus MCP Server stdio communication...')
+    
+    # Test if we can run the MCP server
+    try:
+        # Try to run the MCP server and send a simple MCP message
+        cmd = ['python3', '-c', '''
+import sys
+import json
+
+# Simple MCP client test
+print(json.dumps({
+    \"jsonrpc\": \"2.0\",
+    \"id\": 1,
+    \"method\": \"initialize\",
+    \"params\": {
+        \"protocolVersion\": \"2024-11-05\",
+        \"capabilities\": {},
+        \"clientInfo\": {
+            \"name\": \"test-client\",
+            \"version\": \"1.0.0\"
+        }
+    }
+}))
+        ''']
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        print(f'Command output: {result.stdout}')
+        print(f'Command error: {result.stderr}')
+        print(f'Return code: {result.returncode}')
+        
+        if result.returncode == 0:
+            print('✅ MCP server test completed successfully')
+        else:
+            print('❌ MCP server test failed')
+            
+    except Exception as e:
+        print(f'Error testing MCP server: {e}')
+
+test_mcp_server()
+        "

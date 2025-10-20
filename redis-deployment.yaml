@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-redis-master
+  namespace: default
+  labels:
+    app: rag-redis-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-redis-master
+  template:
+    metadata:
+      labels:
+        app: rag-redis-master
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-redis-master
+  namespace: default
+spec:
+  selector:
+    app: rag-redis-master
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP

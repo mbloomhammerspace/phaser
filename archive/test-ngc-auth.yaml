@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-ngc-auth
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-docker
+    image: docker:27-dind
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🔐 Testing NGC Authentication..."
+        echo "=================================="
+        
+        # Start Docker daemon
+        dockerd &
+        sleep 5
+        
+        # Test authentication
+        echo "📝 NGC API Key: g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588"
+        echo ""
+        echo "🔑 Attempting to login to nvcr.io..."
+        echo "g4nmsl0nq0muus1bde0069ujtb:74c5bca2-76e2-4505-9fd1-9a15e0a49588" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ NGC authentication successful!"
+            echo ""
+            echo "🐳 Testing image pull: nvcr.io/nvidia/blueprint/ingestor-server:2.2.0"
+            docker pull nvcr.io/nvidia/blueprint/ingestor-server:2.2.0
+            
+            if [ $? -eq 0 ]; then
+                echo "✅ Image pull successful!"
+            else
+                echo "❌ Image pull failed!"
+            fi
+        else
+            echo "❌ NGC authentication failed!"
+            echo ""
+            echo "Trying alternative image: nvcr.io/nim/nvidia/llama-3.3-nemotron-super-49b-v1:1.8.5"
+            docker pull nvcr.io/nim/nvidia/llama-3.3-nemotron-super-49b-v1:1.8.5
+        fi
+        
+        echo ""
+        echo "=================================="
+        echo "Test complete. Check logs for results."
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1
+      requests:
+        memory: 1Gi
+        cpu: 0.5

@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-ingest-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== TESTING INGESTOR-SERVER API ==="
+          echo ""
+          echo "1. Testing health endpoint..."
+          curl -v http://ingestor-server:8082/health
+          echo ""
+          echo "2. Testing collections endpoint..."
+          curl -v http://ingestor-server:8082/collections
+          echo ""
+          echo "3. Creating test collection..."
+          curl -v -X POST http://ingestor-server:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "test_collection"}'
+          echo ""
+          echo "4. Testing document upload with simple text..."
+          echo "This is a test document for RAG ingestion." > test.txt
+          curl -v -X POST http://ingestor-server:8082/documents \
+            -F "documents=@test.txt" \
+            -F 'data={"collection_name": "test_collection"}'
+          echo ""
+          echo "=== TEST COMPLETE ==="
+      restartPolicy: Never

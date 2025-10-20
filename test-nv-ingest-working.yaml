@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-nv-ingest-working
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-nv-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== TESTING NV INGEST FUNCTIONALITY ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating test document with NV ingest features..."
+          echo "Test Document for NV Ingest Processing" > nv_ingest_test.txt
+          echo "" >> nv_ingest_test.txt
+          echo "This document contains:" >> nv_ingest_test.txt
+          echo "- Text content for extraction" >> nv_ingest_test.txt
+          echo "- Structured information" >> nv_ingest_test.txt
+          echo "- Data for chunking and embedding" >> nv_ingest_test.txt
+          echo "" >> nv_ingest_test.txt
+          echo "NV Ingest Configuration:" >> nv_ingest_test.txt
+          echo "- Chunk Size: 512" >> nv_ingest_test.txt
+          echo "- Chunk Overlap: 150" >> nv_ingest_test.txt
+          echo "- Extract Text: True" >> nv_ingest_test.txt
+          echo "- Extract Tables: True" >> nv_ingest_test.txt
+          echo "- PDF Splitter: Enabled" >> nv_ingest_test.txt
+          echo ""
+          echo "3. Uploading document for NV ingest processing..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@nv_ingest_test.txt" \
+            -F 'data={"collection_name": "nv_ingest_test_collection"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully for NV ingest processing!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "4. Waiting 15 seconds for NV ingest processing..."
+          sleep 15
+          echo ""
+          echo "5. Testing collections endpoint..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "=== NV INGEST TEST COMPLETE ==="
+      restartPolicy: Never

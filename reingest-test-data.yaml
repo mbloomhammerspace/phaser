@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reingest-test-data
+spec:
+  template:
+    spec:
+      containers:
+      - name: reingest
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -euo pipefail
+          
+          echo "Creating collection: test_data_reingest_$(date +%s)"
+          COLLECTION_NAME="test_data_reingest_$(date +%s)"
+          
+          # Create collection
+          curl -X POST http://ingestor-server:8082/v1/collections \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$COLLECTION_NAME\"}" || echo "Collection creation failed"
+          
+          echo "Collection created: $COLLECTION_NAME"
+          
+          # Upload test files
+          echo "Uploading test files..."
+          
+          # Create a simple test document
+          echo "This is a test document for AI-Q Research Assistant. It contains information about machine learning and artificial intelligence." > /tmp/test1.txt
+          echo "This is another test document about data science and analytics." > /tmp/test2.txt
+          
+          # Upload files
+          curl -X POST "http://ingestor-server:8082/v1/collections/$COLLECTION_NAME/documents" \
+            -H "Content-Type: multipart/form-data" \
+            -F "file=@/tmp/test1.txt" \
+            -F "filename=test1.txt" || echo "Upload 1 failed"
+          
+          curl -X POST "http://ingestor-server:8082/v1/collections/$COLLECTION_NAME/documents" \
+            -H "Content-Type: multipart/form-data" \
+            -F "file=@/tmp/test2.txt" \
+            -F "filename=test2.txt" || echo "Upload 2 failed"
+          
+          echo "Upload completed. Collection: $COLLECTION_NAME"
+          
+          # Wait for processing
+          echo "Waiting for processing to complete..."
+          sleep 30
+          
+          echo "Re-ingestion completed successfully!"
+      restartPolicy: Never

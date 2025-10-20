@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-nim
+spec:
+  selector:
+    app: simple-embedding
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: embedding-server-code
+data:
+  server.py: |
+    from fastapi import FastAPI
+    from sentence_transformers import SentenceTransformer
+    import uvicorn
+    import numpy as np
+    
+    app = FastAPI()
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    
+    @app.post("/v1/embeddings")
+    async def embeddings(request: dict):
+        texts = request.get("input", [])
+        if isinstance(texts, str):
+            texts = [texts]
+        embeddings = model.encode(texts)
+        padded = []
+        for emb in embeddings:
+            if len(emb) < 1024:
+                padded_emb = np.pad(emb, (0, 1024 - len(emb)), mode="constant")
+            else:
+                padded_emb = emb[:1024]
+            padded.append(padded_emb.tolist())
+        return {"data": [{"embedding": e, "index": i} for i, e in enumerate(padded)]}
+    
+    @app.get("/v1/health/ready")
+    async def health():
+        return {"ready": True}
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-embedding
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: simple-embedding
+  template:
+    metadata:
+      labels:
+        app: simple-embedding
+    spec:
+      containers:
+      - name: embedding
+        image: python:3.11
+        command: ["/bin/bash", "-c"]
+        args:
+          - pip install fastapi uvicorn sentence-transformers torch numpy --quiet && python3 /app/server.py
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: code
+          mountPath: /app
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: 8Gi
+          requests:
+            nvidia.com/gpu: 1
+            memory: 4Gi
+      volumes:
+      - name: code
+        configMap:
+          name: embedding-server-code
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+

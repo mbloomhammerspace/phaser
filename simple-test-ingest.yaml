@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-test-ingest
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-ingest
+        image: python:3.11
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "=== SIMPLE TEST INGESTION ==="
+          echo ""
+          echo "Creating test document..."
+          echo "This is a test document for RAG ingestion. It contains information about testing the NVIDIA RAG Blueprint system. The document includes details about vector databases, embeddings, and retrieval-augmented generation. This should be processed and stored in the Milvus vector database." > test.txt
+          echo ""
+          echo "Testing direct connection to ingestor-server..."
+          python3 -c "
+          import requests
+          import json
+          
+          # Test with service IP
+          ingestor_ip = '10.233.51.201'
+          
+          try:
+              # Test health
+              r = requests.get(f'http://{ingestor_ip}:8082/health', timeout=10)
+              print(f'Health: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Health failed: {e}')
+          
+          try:
+              # Test collections
+              r = requests.get(f'http://{ingestor_ip}:8082/collections', timeout=10)
+              print(f'Collections: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Collections failed: {e}')
+          
+          try:
+              # Create collection
+              r = requests.post(f'http://{ingestor_ip}:8082/collection', 
+                              json={'collection_name': 'test_collection'}, timeout=30)
+              print(f'Collection creation: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Collection creation failed: {e}')
+          
+          try:
+              # Upload document
+              with open('test.txt', 'r') as f:
+                  content = f.read()
+              
+              files = {'documents': ('test.txt', content, 'text/plain')}
+              data = {'data': json.dumps({'collection_name': 'test_collection'})}
+              
+              r = requests.post(f'http://{ingestor_ip}:8082/documents',
+                              files=files, data=data, timeout=120)
+              print(f'Document upload: {r.status_code} - {r.text}')
+          except Exception as e:
+              print(f'Document upload failed: {e}')
+          "
+          echo ""
+          echo "=== TEST COMPLETE ==="
+      restartPolicy: Never

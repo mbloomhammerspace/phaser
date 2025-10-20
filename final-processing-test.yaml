@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: final-processing-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: final-test
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== FINAL DOCUMENT PROCESSING TEST ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating final test document..."
+          echo "Final Processing Test Document" > final_test.txt
+          echo "" >> final_test.txt
+          echo "This is the final test to verify that document processing" >> final_test.txt
+          echo "is working correctly with Redis connectivity fixed." >> final_test.txt
+          echo "" >> final_test.txt
+          echo "Test Contents:" >> final_test.txt
+          echo "- Redis connection test" >> final_test.txt
+          echo "- NV ingest processing validation" >> final_test.txt
+          echo "- Document chunking verification" >> final_test.txt
+          echo "- Vector embedding confirmation" >> final_test.txt
+          echo "- Milvus storage validation" >> final_test.txt
+          echo "" >> final_test.txt
+          echo "Expected Results:" >> final_test.txt
+          echo "- Document should be processed successfully" >> final_test.txt
+          echo "- Collection should show non-zero entity count" >> final_test.txt
+          echo "- Vectors should be stored in Milvus" >> final_test.txt
+          echo "- Processing should complete without errors" >> final_test.txt
+          echo ""
+          echo "Timestamp: $(date)" >> final_test.txt
+          echo "✅ Final test document created"
+          echo ""
+          echo "3. Creating final_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "final_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for final processing test..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@final_test.txt" \
+            -F 'data={"collection_name": "final_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. Waiting 90 seconds for processing..."
+            sleep 90
+            echo ""
+            echo "6. Checking final collections status..."
+            curl -s http://10.233.51.201:8082/collections
+            echo ""
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "=== FINAL PROCESSING TEST COMPLETE ==="
+      restartPolicy: Never

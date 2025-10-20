@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nim-llm-working
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nim-llm-working
+  template:
+    metadata:
+      labels:
+        app: nim-llm-working
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: instance-20251003-1851
+      containers:
+      - name: nim-llm
+        image: nvcr.io/nim/meta/llama3-8b-instruct:latest
+        imagePullPolicy: IfNotPresent  # Use cached image we just pulled
+        env:
+        - name: NGC_API_KEY
+          value: "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"
+        - name: NVIDIA_API_KEY
+          value: "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"
+        - name: NIM_CACHE_PATH
+          value: "/nim-cache"
+        volumeMounts:
+        - name: nim-cache
+          mountPath: /nim-cache
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            memory: 20Gi
+            cpu: "4"
+          limits:
+            nvidia.com/gpu: "1"
+            memory: 40Gi
+            cpu: "8"
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /v1/models
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 5
+      volumes:
+      - name: nim-cache
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+      imagePullSecrets:
+      - name: ngc-secret
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-llm-working
+  namespace: default
+spec:
+  selector:
+    app: nim-llm-working
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Settings Injector for NVIDIA RAG Blueprint</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            display: inline-block;
+            text-decoration: none;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .button.danger:hover {
+            background: #c82333;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .preview {
+            border: 2px dashed #007bff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        .preview h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 MCP Settings Injector</h1>
+        <p style="text-align: center; color: #666; font-size: 18px;">
+            Add MCP control directly to NVIDIA RAG Blueprint settings panel
+        </p>
+        
+        <div class="step">
+            <h3>📋 What This Does</h3>
+            <p>This injector adds a <strong>MCP Services Control</strong> section directly into the NVIDIA RAG Blueprint settings panel, right next to the Guardrails option. You'll be able to:</p>
+            <ul>
+                <li>✅ See real-time MCP status (Enabled/Disabled)</li>
+                <li>🔘 Toggle MCP services on/off with a checkbox</li>
+                <li>🔴 Quickly disable all MCP services with a "Disable All" button</li>
+                <li>🟢 Re-enable MCP services with an "Enable All" button</li>
+                <li>📊 Get visual feedback when MCP is working vs not working</li>
+            </ul>
+        </div>
+        
+        <div class="preview">
+            <h4>🎯 Preview of What You'll See</h4>
+            <p>In your NVIDIA RAG Blueprint settings panel, you'll see:</p>
+            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin: 10px 0;">
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 500; color: #495057; margin-right: 8px;">🔌</span>
+                    <span style="font-weight: 500; color: #495057; font-size: 14px;">MCP Services</span>
+                    <span style="margin-left: auto; font-size: 12px; padding: 2px 6px; border-radius: 3px; background: #28a745; color: white;">Enabled</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #6c757d;">
+                        <input type="checkbox" checked style="margin-right: 6px;">
+                        Enable MCP Services
+                    </label>
+                    <button style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                        Disable All
+                    </button>
+                </div>
+                <div style="margin-top: 6px; font-size: 11px; color: #6c757d;">
+                    Control Model Context Protocol services and tools
+                </div>
+            </div>
+        </div>
+        
+        <div class="step">
+            <h3>🚀 How to Use</h3>
+            <p><strong>Option 1: Browser Console (Recommended)</strong></p>
+            <ol>
+                <li>Open your NVIDIA RAG Blueprint at <code>http://150.136.235.189:32507/</code></li>
+                <li>Open the Settings panel (click the Settings icon)</li>
+                <li>Open your browser's Developer Tools (F12)</li>
+                <li>Go to the Console tab</li>
+                <li>Copy and paste the entire script below into the console and press Enter</li>
+            </ol>
+            
+            <div class="code-block" id="script-content">
+                // Copy this entire script and paste it into your browser console
+                (function() {
+                    'use strict';
+                    
+                    const RAG_SERVER_URL = window.location.origin.replace(':32507', ':8081');
+                    let mcpGlobalEnabled = true;
+                    let isInjected = false;
+                    
+                    function injectMCPControls() {
+                        const guardrailsSection = findGuardrailsSection();
+                        if (!guardrailsSection) {
+                            console.log('Guardrails section not found, retrying...');
+                            return false;
+                        }
+                        
+                        if (guardrailsSection.querySelector('.mcp-controls-injected')) {
+                            return true;
+                        }
+                        
+                        const mcpContainer = document.createElement('div');
+                        mcpContainer.className = 'mcp-controls-injected';
+                        mcpContainer.innerHTML = `
+                            <div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    <span style="font-weight: 500; color: #495057; margin-right: 8px;">🔌</span>
+                                    <span style="font-weight: 500; color: #495057; font-size: 14px;">MCP Services</span>
+                                    <span id="mcp-status-indicator" style="margin-left: auto; font-size: 12px; padding: 2px 6px; border-radius: 3px; background: #28a745; color: white;">Enabled</span>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #6c757d;">
+                                        <input type="checkbox" id="mcp-global-checkbox" ${mcpGlobalEnabled ? 'checked' : ''} style="margin-right: 6px;">
+                                        Enable MCP Services
+                                    </label>
+                                    <button id="mcp-disable-btn" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                                        Disable All
+                                    </button>
+                                    <button id="mcp-enable-btn" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer; display: none;">
+                                        Enable All
+                                    </button>
+                                </div>
+                                <div style="margin-top: 6px; font-size: 11px; color: #6c757d;">
+                                    Control Model Context Protocol services and tools
+                                </div>
+                            </div>
+                        `;
+                        
+                        guardrailsSection.parentNode.insertBefore(mcpContainer, guardrailsSection.nextSibling);
+                        
+                        document.getElementById('mcp-global-checkbox').addEventListener('change', function() {
+                            updateMCPSettings();
+                        });
+                        
+                        document.getElementById('mcp-disable-btn').addEventListener('click', function() {
+                            disableMCP();
+                        });
+                        
+                        document.getElementById('mcp-enable-btn').addEventListener('click', function() {
+                            enableMCP();
+                        });
+                        
+                        loadMCPSettings();
+                        console.log('✅ MCP controls injected into settings panel');
+                        return true;
+                    }
+                    
+                    function findGuardrailsSection() {
+                        const textNodes = [];
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+                        let node;
+                        while (node = walker.nextNode()) {
+                            if (node.textContent.includes('Guardrails') || node.textContent.includes('Apply guardrails')) {
+                                textNodes.push(node);
+                            }
+                        }
+                        
+                        for (const textNode of textNodes) {
+                            let parent = textNode.parentElement;
+                            while (parent) {
+                                if (parent.querySelector('input[type="checkbox"]')) {
+                                    return parent;
+                                }
+                                parent = parent.parentElement;
+                            }
+                        }
+                        
+                        const guardrailsText = Array.from(document.querySelectorAll('*')).find(el => 
+                            el.textContent && el.textContent.includes('Guardrails')
+                        );
+                        
+                        if (guardrailsText) {
+                            let parent = guardrailsText.parentElement;
+                            while (parent) {
+                                if (parent.querySelector('input[type="checkbox"]')) {
+                                    return parent;
+                                }
+                                parent = parent.parentElement;
+                            }
+                        }
+                        
+                        return null;
+                    }
+                    
+                    async function loadMCPSettings() {
+                        try {
+                            const response = await fetch(`${RAG_SERVER_URL}/mcp/settings`);
+                            if (response.ok) {
+                                const settings = await response.json();
+                                mcpGlobalEnabled = settings.mcp_global_enabled;
+                                
+                                const checkbox = document.getElementById('mcp-global-checkbox');
+                                const statusIndicator = document.getElementById('mcp-status-indicator');
+                                const disableBtn = document.getElementById('mcp-disable-btn');
+                                const enableBtn = document.getElementById('mcp-enable-btn');
+                                
+                                if (checkbox) checkbox.checked = mcpGlobalEnabled;
+                                
+                                if (mcpGlobalEnabled) {
+                                    if (statusIndicator) {
+                                        statusIndicator.textContent = 'Enabled';
+                                        statusIndicator.style.background = '#28a745';
+                                    }
+                                    if (disableBtn) disableBtn.style.display = 'inline-block';
+                                    if (enableBtn) enableBtn.style.display = 'none';
+                                } else {
+                                    if (statusIndicator) {
+                                        statusIndicator.textContent = 'Disabled';
+                                        statusIndicator.style.background = '#dc3545';
+                                    }
+                                    if (disableBtn) disableBtn.style.display = 'none';
+                                    if (enableBtn) enableBtn.style.display = 'inline-block';
+                                }
+                                
+                                console.log('📡 MCP settings loaded:', settings);
+                            }
+                        } catch (e) {
+                            console.error('❌ Error loading MCP settings:', e);
+                            const statusIndicator = document.getElementById('mcp-status-indicator');
+                            if (statusIndicator) {
+                                statusIndicator.textContent = 'Error';
+                                statusIndicator.style.background = '#ffc107';
+                            }
+                        }
+                    }
+                    
+                    async function updateMCPSettings() {
+                        const checkbox = document.getElementById('mcp-global-checkbox');
+                        if (!checkbox) return;
+                        
+                        mcpGlobalEnabled = checkbox.checked;
+                        
+                        try {
+                            const response = await fetch(`${RAG_SERVER_URL}/mcp/settings`, {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    mcp_global_enabled: mcpGlobalEnabled
+                                })
+                            });
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                console.log('✅ MCP settings updated:', result);
+                                loadMCPSettings();
+                            }
+                        } catch (e) {
+                            console.error('❌ Error updating MCP settings:', e);
+                            checkbox.checked = !mcpGlobalEnabled;
+                            mcpGlobalEnabled = !mcpGlobalEnabled;
+                        }
+                    }
+                    
+                    async function disableMCP() {
+                        try {
+                            const response = await fetch(`${RAG_SERVER_URL}/mcp/disable`, {
+                                method: 'POST'
+                            });
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                console.log('🔴 MCP disabled:', result);
+                                loadMCPSettings();
+                                
+                                const notification = document.createElement('div');
+                                notification.style.cssText = `
+                                    position: fixed; top: 20px; right: 20px; padding: 12px 16px;
+                                    border-radius: 4px; background: #ffc107; color: white; font-size: 14px;
+                                    font-weight: 500; z-index: 10000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                                `;
+                                notification.textContent = 'MCP Services Disabled';
+                                document.body.appendChild(notification);
+                                setTimeout(() => notification.remove(), 3000);
+                            }
+                        } catch (e) {
+                            console.error('❌ Error disabling MCP:', e);
+                        }
+                    }
+                    
+                    async function enableMCP() {
+                        try {
+                            const response = await fetch(`${RAG_SERVER_URL}/mcp/enable`, {
+                                method: 'POST'
+                            });
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                console.log('🟢 MCP enabled:', result);
+                                loadMCPSettings();
+                                
+                                const notification = document.createElement('div');
+                                notification.style.cssText = `
+                                    position: fixed; top: 20px; right: 20px; padding: 12px 16px;
+                                    border-radius: 4px; background: #28a745; color: white; font-size: 14px;
+                                    font-weight: 500; z-index: 10000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                                `;
+                                notification.textContent = 'MCP Services Enabled';
+                                document.body.appendChild(notification);
+                                setTimeout(() => notification.remove(), 3000);
+                            }
+                        } catch (e) {
+                            console.error('❌ Error enabling MCP:', e);
+                        }
+                    }
+                    
+                    function tryInject() {
+                        if (!isInjected) {
+                            isInjected = injectMCPControls();
+                        }
+                    }
+                    
+                    function init() {
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', init);
+                            return;
+                        }
+                        
+                        console.log('🔌 MCP Settings Injector starting...');
+                        tryInject();
+                        
+                        const interval = setInterval(() => {
+                            if (!isInjected) {
+                                tryInject();
+                            } else {
+                                clearInterval(interval);
+                                console.log('✅ MCP controls successfully injected into NVIDIA RAG Blueprint');
+                            }
+                        }, 2000);
+                        
+                        const observer = new MutationObserver(() => {
+                            if (!isInjected) {
+                                tryInject();
+                            }
+                        });
+                        
+                        observer.observe(document.body, {
+                            childList: true,
+                            subtree: true
+                        });
+                        
+                        setTimeout(() => observer.disconnect(), 30000);
+                    }
+                    
+                    init();
+                })();
+            </div>
+            
+            <button class="button" onclick="copyScript()">📋 Copy Script</button>
+            
+            <p><strong>Option 2: Bookmarklet</strong></p>
+            <p>Create a bookmark with this URL to quickly inject the MCP controls:</p>
+            <div class="code-block">
+                javascript:(function(){/* MCP Injector Script */})();
+            </div>
+        </div>
+        
+        <div class="step">
+            <h3>🎯 What You'll See</h3>
+            <p>After running the script, you'll see a new <strong>"🔌 MCP Services"</strong> section in your settings panel with:</p>
+            <ul>
+                <li><strong>Status Indicator:</strong> Shows "Enabled" (green) or "Disabled" (red)</li>
+                <li><strong>Checkbox:</strong> Toggle MCP services on/off</li>
+                <li><strong>Disable All Button:</strong> Instantly disable all MCP services</li>
+                <li><strong>Enable All Button:</strong> Re-enable MCP services when disabled</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>🔍 Testing MCP Status</h3>
+            <p>Use this to easily identify when MCP is working vs not working:</p>
+            <ol>
+                <li><strong>MCP Enabled:</strong> Status shows "Enabled" (green), you can use MCP tools in chat</li>
+                <li><strong>MCP Disabled:</strong> Status shows "Disabled" (red), MCP tools won't work</li>
+                <li><strong>MCP Error:</strong> Status shows "Error" (yellow), there's a connection issue</li>
+            </ol>
+        </div>
+        
+        <div class="status success">
+            <strong>✅ Ready to Use!</strong> This injector will add MCP controls directly to your NVIDIA RAG Blueprint settings panel, making it easy to disable MCP services when needed for testing.
+        </div>
+    </div>
+    
+    <script>
+        function copyScript() {
+            const scriptContent = document.getElementById('script-content').textContent;
+            navigator.clipboard.writeText(scriptContent).then(() => {
+                alert('Script copied to clipboard! Now paste it into your browser console.');
+            }).catch(() => {
+                alert('Please manually copy the script from the code block above.');
+            });
+        }
+    </script>
+</body>
+</html>

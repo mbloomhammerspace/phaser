@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-single-pdf-nv
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: pdf-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== INGESTING SINGLE PDF WITH NV INGEST ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating comprehensive test document content..."
+          echo "Test Document for NV Ingest Processing" > test_document.txt
+          echo "" >> test_document.txt
+          echo "This document contains comprehensive information for testing" >> test_document.txt
+          echo "the NVIDIA NV Ingest framework capabilities." >> test_document.txt
+          echo "" >> test_document.txt
+          echo "Document Contents:" >> test_document.txt
+          echo "1. Machine Learning and AI Concepts" >> test_document.txt
+          echo "2. Vector Databases and Embeddings" >> test_document.txt
+          echo "3. Retrieval-Augmented Generation (RAG)" >> test_document.txt
+          echo "4. Natural Language Processing" >> test_document.txt
+          echo "5. Document Processing and Indexing" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "This document should be processed using NV Ingest with:" >> test_document.txt
+          echo "- Text extraction enabled" >> test_document.txt
+          echo "- Table extraction enabled" >> test_document.txt
+          echo "- Chunk size: 512 tokens" >> test_document.txt
+          echo "- Chunk overlap: 150 tokens" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "Document metadata:" >> test_document.txt
+          echo "Type: Test PDF Document" >> test_document.txt
+          echo "Purpose: NV Ingest Framework Testing" >> test_document.txt
+          echo "Collection: single_pdf_test" >> test_document.txt
+          echo "Timestamp: $(date)" >> test_document.txt
+          echo "✅ Test document created"
+          echo ""
+          echo "3. Creating single_pdf_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "single_pdf_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for NV ingest processing..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@test_document.txt" \
+            -F 'data={"collection_name": "single_pdf_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully for NV ingest processing!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. NV Ingest Processing Details:"
+            echo "  • Framework: NVIDIA nv-ingest"
+            echo "  • Chunk Size: 512 tokens"
+            echo "  • Chunk Overlap: 150 tokens"
+            echo "  • Text Extraction: Enabled"
+            echo "  • Table Extraction: Enabled"
+            echo "  • PDF Splitter: Enabled"
+            echo "  • Processing: Background pipeline"
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "6. Waiting 20 seconds for initial processing..."
+          sleep 20
+          echo ""
+          echo "7. Checking collections..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "=== SINGLE PDF INGESTION COMPLETE ==="
+      restartPolicy: Never

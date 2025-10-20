@@ -1,0 +1,19 @@
+AI-Q Research Assistant Helm Chart
+
+1) Install
+
+  helm install aiq ./charts/aiq-research-assistant \
+    --set backend.image.repository=REPLACE_ME/aiq-aira \
+    --set backend.image.tag=latest \
+    --set proxy.backendUrl=http://aiq-backend:8080 \
+    --set proxy.ragServerUrl=http://rag-server:8081
+
+2) Services
+
+  Backend:    {{ include "aiq-research-assistant.backendName" . }} (ClusterIP:{{ .Values.backend.service.port }})
+  Proxy:      {{ include "aiq-research-assistant.proxyName" . }} (ClusterIP:{{ .Values.proxy.service.port }})
+
+3) Test Proxy
+
+  kubectl run curl --rm -it --image=curlimages/curl --restart=Never -- \
+    curl -s {{ include "aiq-research-assistant.proxyName" . }}:{{ .Values.proxy.service.port }}/

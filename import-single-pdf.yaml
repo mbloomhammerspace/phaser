@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: import-single-pdf
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: pdf-import
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== IMPORTING SINGLE PDF ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Checking existing collections..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "3. Creating a test PDF document..."
+          echo "Creating a comprehensive test document..." > test_document.txt
+          echo "" >> test_document.txt
+          echo "This is a test document for RAG ingestion into Milvus." >> test_document.txt
+          echo "It contains detailed information about various topics:" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "- Machine Learning and AI" >> test_document.txt
+          echo "- Vector Databases and Embeddings" >> test_document.txt
+          echo "- Retrieval-Augmented Generation (RAG)" >> test_document.txt
+          echo "- Natural Language Processing" >> test_document.txt
+          echo "- Document Processing and Indexing" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "This document should be processed, embedded, and stored in the Milvus vector database." >> test_document.txt
+          echo "The embeddings will be used for semantic search and retrieval tasks." >> test_document.txt
+          echo "" >> test_document.txt
+          echo "Document metadata:" >> test_document.txt
+          echo "- Type: Test Document" >> test_document.txt
+          echo "- Purpose: RAG Pipeline Testing" >> test_document.txt
+          echo "- Collection: test_documents" >> test_document.txt
+          echo "- Timestamp: $(date)" >> test_document.txt
+          echo ""
+          echo "4. Creating test_documents collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "test_documents"}'
+          echo ""
+          echo ""
+          echo "5. Uploading the test document..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@test_document.txt" \
+            -F 'data={"collection_name": "test_documents"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully!"
+            echo "📋 Task ID: $(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)"
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "6. Waiting 10 seconds for processing..."
+          sleep 10
+          echo ""
+          echo "7. Checking collections again..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "=== IMPORT COMPLETE ==="
+      restartPolicy: Never

@@ -1,0 +1,149 @@
+# NVIDIA RAG Blueprint - Enable NIM Services
+# Update the blueprint to enable LLM and embedding NIMs
+
+nim-llm:
+  enabled: true
+  image:
+    repository: nvcr.io/nim/meta/llama3-8b-instruct
+    tag: latest
+  model:
+    ngcAPIKey: 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
+    nimCachePath: /nim-cache
+  replicaCount: 1
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 40Gi
+      cpu: 8
+    requests:
+      nvidia.com/gpu: 1
+      memory: 20Gi
+      cpu: 4
+  service:
+    port: 8000
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  volumeMounts:
+  - name: nim-cache
+    mountPath: /nim-cache
+  volumes:
+  - name: nim-cache
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+
+nvidia-nim-llama-32-nv-embedqa-1b-v2:
+  enabled: true
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2
+    tag: 1.2.2
+  model:
+    ngcAPIKey: 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
+    nimCachePath: /nim-cache
+  replicaCount: 2
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  service:
+    port: 8000
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  volumeMounts:
+  - name: nim-cache
+    mountPath: /nim-cache
+  volumes:
+  - name: nim-cache
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+
+text-reranking-nim:
+  enabled: true
+  image:
+    repository: nvcr.io/nim/nvidia/llama-3.2-nv-rerankqa-1b-v2
+    tag: 1.2.2
+  model:
+    ngcAPIKey: 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
+    nimCachePath: /nim-cache
+  replicaCount: 1
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: 16Gi
+    requests:
+      nvidia.com/gpu: 1
+      memory: 8Gi
+  service:
+    port: 8000
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  volumeMounts:
+  - name: nim-cache
+    mountPath: /nim-cache
+  volumes:
+  - name: nim-cache
+    persistentVolumeClaim:
+      claimName: blueprint-storage
+
+# Update NGC API secrets
+ngcApiSecret:
+  create: true
+  name: ngc-api
+  password: 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
+
+imagePullSecret:
+  create: true
+  name: ngc-secret
+  password: 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
+
+# Update environment variables with new API key
+envVars:
+  NGC_API_KEY: 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
+  NVIDIA_API_KEY: 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
+  APP_LLM_MODELNAME: nvidia/llama-3.3-nemotron-super-49b-v1
+  APP_EMBEDDINGS_MODELNAME: nvidia/llama-3.2-nv-embedqa-1b-v2
+  APP_RANKING_MODELNAME: nvidia/llama-3.2-nv-rerankqa-1b-v2
+  APP_VECTORSTORE_NAME: milvus
+  APP_VECTORSTORE_URL: http://milvus:19530
+  COLLECTION_NAME: pdfs_new_ingestion
+
+# Enable Zipkin for tracing
+zipkin:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30669
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 500m
+    requests:
+      memory: 512Mi
+      cpu: 250m
+
+# Enable Attu for Milvus management
+attu:
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30670
+  env:
+    MILVUS_URL: http://milvus:19530
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m

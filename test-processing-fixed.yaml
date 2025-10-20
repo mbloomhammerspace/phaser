@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-processing-fixed
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: test-processing
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== TESTING DOCUMENT PROCESSING WITH REDIS FIXED ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating test document..."
+          echo "Test Document for Processing Validation" > test_processing.txt
+          echo "" >> test_processing.txt
+          echo "This document is designed to test if the NV ingest processing" >> test_processing.txt
+          echo "is now working correctly with Redis connectivity fixed." >> test_processing.txt
+          echo "" >> test_processing.txt
+          echo "Document Contents:" >> test_processing.txt
+          echo "- Processing validation test" >> test_processing.txt
+          echo "- Redis connectivity check" >> test_processing.txt
+          echo "- NV ingest framework test" >> test_processing.txt
+          echo "- Document chunking and embedding test" >> test_processing.txt
+          echo "" >> test_processing.txt
+          echo "Expected Results:" >> test_processing.txt
+          echo "- Document should be chunked into 512-token segments" >> test_processing.txt
+          echo "- Each chunk should be embedded using nvidia/llama-3.2-nv-embedqa-1b-v2" >> test_processing.txt
+          echo "- Vectors should be stored in Milvus" >> test_processing.txt
+          echo "- Collection should show non-zero entity count" >> test_processing.txt
+          echo ""
+          echo "Timestamp: $(date)" >> test_processing.txt
+          echo "✅ Test document created"
+          echo ""
+          echo "3. Creating processing_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "processing_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for processing..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@test_processing.txt" \
+            -F 'data={"collection_name": "processing_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. Waiting 60 seconds for processing..."
+            sleep 60
+            echo ""
+            echo "6. Checking collections status..."
+            curl -s http://10.233.51.201:8082/collections
+            echo ""
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "=== PROCESSING TEST COMPLETE ==="
+      restartPolicy: Never

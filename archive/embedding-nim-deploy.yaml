@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nemoretriever-embedding-ms-nim
+spec:
+  selector:
+    app: embedding-nim
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: embedding-nim
+spec:
+  serviceName: nemoretriever-embedding-ms-nim
+  replicas: 3
+  selector:
+    matchLabels:
+      app: embedding-nim
+  template:
+    metadata:
+      labels:
+        app: embedding-nim
+    spec:
+      imagePullSecrets:
+      - name: ngc-api
+      containers:
+      - name: embedding
+        image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.2.2
+        env:
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-api
+              key: NGC_API_KEY
+        - name: NIM_CACHE_PATH
+          value: "/nim-cache"
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: 16Gi
+          requests:
+            nvidia.com/gpu: 1
+            memory: 8Gi
+        volumeMounts:
+        - name: nim-cache
+          mountPath: /nim-cache
+        livenessProbe:
+          httpGet:
+            path: /v1/health/live
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /v1/health/ready
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - name: nim-cache
+        persistentVolumeClaim:
+          claimName: blueprint-storage
+

@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-ngc-final
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test-docker
+    image: docker:27-dind
+    command: ["sh", "-c"]
+    args:
+      - |
+        echo "🔐 Final NGC Authentication Test..."
+        echo "======================================================"
+        
+        # Start Docker daemon
+        dockerd &
+        sleep 8
+        
+        # Test both keys with proper format
+        echo ""
+        echo "🔑 Testing KEY 1 (nvapi-vJCVHthad...)..."
+        echo "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" | docker login nvcr.io --username '$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ KEY 1: Login successful!"
+            echo "🐳 Attempting to pull: nvcr.io/nim/meta/llama3-8b-instruct:latest"
+            timeout 60 docker pull nvcr.io/nim/meta/llama3-8b-instruct:latest
+            
+            if [ $? -eq 0 ]; then
+                echo "✅✅✅ KEY 1 WORKS! Image pulled successfully!"
+                echo "Using KEY 1 for NGC secret."
+                exit 0
+            else
+                echo "⚠️  KEY 1: Login works but image pull failed (may need different image)"
+            fi
+        else
+            echo "❌ KEY 1: Login failed"
+        fi
+        
+        # Logout
+        docker logout nvcr.io 2>/dev/null
+        
+        echo ""
+        echo "======================================================"
+        echo "🔑 Testing KEY 2 (nvapi-T-oeBiMhpJu...)..."
+        echo "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" | docker login nvcr.io --username '$oauthtoken' --password-stdin
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ KEY 2: Login successful!"
+            echo "🐳 Attempting to pull: nvcr.io/nim/meta/llama3-8b-instruct:latest"
+            timeout 60 docker pull nvcr.io/nim/meta/llama3-8b-instruct:latest
+            
+            if [ $? -eq 0 ]; then
+                echo "✅✅✅ KEY 2 WORKS! Image pulled successfully!"
+                echo "Using KEY 2 for NGC secret."
+                exit 0
+            else
+                echo "⚠️  KEY 2: Login works but image pull failed"
+            fi
+        else
+            echo "❌ KEY 2: Login failed"
+        fi
+        
+        echo ""
+        echo "======================================================"
+        echo "Testing publicly available images..."
+        echo "======================================================"
+        
+        # Try a public NGC image
+        docker pull nvcr.io/nvidia/cuda:12.2.0-base-ubuntu22.04
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Public NVIDIA images work (no auth needed)"
+        fi
+        
+        echo ""
+        echo "Test complete."
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        memory: 4Gi
+        cpu: 2
+      requests:
+        memory: 2Gi
+        cpu: 1

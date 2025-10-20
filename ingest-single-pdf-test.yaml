@@ -1,0 +1,127 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-single-pdf-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: pdf-ingest
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== INGESTING SINGLE PDF INTO ingest_test COLLECTION ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Creating comprehensive test document for ingest_test..."
+          echo "Test Document for ingest_test Collection" > test_document.txt
+          echo "" >> test_document.txt
+          echo "This is a comprehensive test document designed for the ingest_test collection." >> test_document.txt
+          echo "It contains detailed information across multiple domains:" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "DOCUMENT CONTENTS:" >> test_document.txt
+          echo "==================" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "1. ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING" >> test_document.txt
+          echo "   - Deep learning algorithms and neural networks" >> test_document.txt
+          echo "   - Natural language processing techniques" >> test_document.txt
+          echo "   - Computer vision and image recognition" >> test_document.txt
+          echo "   - Reinforcement learning and autonomous systems" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "2. VECTOR DATABASES AND EMBEDDINGS" >> test_document.txt
+          echo "   - Vector similarity search algorithms" >> test_document.txt
+          echo "   - Embedding models and dimensionality reduction" >> test_document.txt
+          echo "   - Indexing strategies for high-dimensional data" >> test_document.txt
+          echo "   - Performance optimization techniques" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "3. RETRIEVAL-AUGMENTED GENERATION (RAG)" >> test_document.txt
+          echo "   - Document retrieval and ranking systems" >> test_document.txt
+          echo "   - Context-aware generation models" >> test_document.txt
+          echo "   - Knowledge base integration methods" >> test_document.txt
+          echo "   - Query understanding and reformulation" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "4. DOCUMENT PROCESSING AND INDEXING" >> test_document.txt
+          echo "   - Text extraction and preprocessing" >> test_document.txt
+          echo "   - Chunking strategies for optimal retrieval" >> test_document.txt
+          echo "   - Metadata extraction and enrichment" >> test_document.txt
+          echo "   - Quality assessment and validation" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "5. SEARCH AND RETRIEVAL SYSTEMS" >> test_document.txt
+          echo "   - Semantic search implementations" >> test_document.txt
+          echo "   - Hybrid search combining multiple modalities" >> test_document.txt
+          echo "   - Relevance scoring and ranking algorithms" >> test_document.txt
+          echo "   - User interaction and feedback mechanisms" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "NV INGEST PROCESSING CONFIGURATION:" >> test_document.txt
+          echo "====================================" >> test_document.txt
+          echo "• Collection Name: ingest_test" >> test_document.txt
+          echo "• Chunk Size: 512 tokens" >> test_document.txt
+          echo "• Chunk Overlap: 150 tokens" >> test_document.txt
+          echo "• Text Extraction: Enabled" >> test_document.txt
+          echo "• Table Extraction: Enabled" >> test_document.txt
+          echo "• Image Extraction: Disabled" >> test_document.txt
+          echo "• Chart Extraction: Disabled" >> test_document.txt
+          echo "• Infographic Extraction: Disabled" >> test_document.txt
+          echo "• PDF Splitter: Enabled" >> test_document.txt
+          echo "• Processing Framework: NVIDIA nv-ingest" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "DOCUMENT METADATA:" >> test_document.txt
+          echo "==================" >> test_document.txt
+          echo "Type: Comprehensive Test Document" >> test_document.txt
+          echo "Purpose: ingest_test Collection Population" >> test_document.txt
+          echo "Target Collection: ingest_test" >> test_document.txt
+          echo "Processing Method: NV Ingest Framework" >> test_document.txt
+          echo "Creation Date: $(date)" >> test_document.txt
+          echo "Document ID: ingest_test_001" >> test_document.txt
+          echo "Version: 1.0" >> test_document.txt
+          echo "" >> test_document.txt
+          echo "This document should be processed by the NV ingest framework" >> test_document.txt
+          echo "and stored in the ingest_test collection for testing and validation" >> test_document.txt
+          echo "of the RAG pipeline functionality." >> test_document.txt
+          echo "✅ Test document created"
+          echo ""
+          echo "3. Creating ingest_test collection..."
+          curl -s -X POST http://10.233.51.201:8082/collection \
+            -H "Content-Type: application/json" \
+            -d '{"collection_name": "ingest_test"}'
+          echo ""
+          echo ""
+          echo "4. Uploading document for NV ingest processing..."
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@test_document.txt" \
+            -F 'data={"collection_name": "ingest_test"}')
+          echo "Upload response: $response"
+          echo ""
+          if echo "$response" | grep -q "task_id"; then
+            echo "✅ Document uploaded successfully for NV ingest processing!"
+            task_id=$(echo "$response" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+            echo "📋 Task ID: $task_id"
+            echo ""
+            echo "5. NV Ingest Processing Details:"
+            echo "  • Collection: ingest_test"
+            echo "  • Framework: NVIDIA nv-ingest"
+            echo "  • Chunk Size: 512 tokens"
+            echo "  • Chunk Overlap: 150 tokens"
+            echo "  • Text Extraction: Enabled"
+            echo "  • Table Extraction: Enabled"
+            echo "  • PDF Splitter: Enabled"
+            echo "  • Processing: Background pipeline"
+          else
+            echo "❌ Document upload failed!"
+          fi
+          echo ""
+          echo "6. Waiting 30 seconds for processing..."
+          sleep 30
+          echo ""
+          echo "7. Checking collections status..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "=== SINGLE PDF INGESTION INTO ingest_test COMPLETE ==="
+      restartPolicy: Never

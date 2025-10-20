@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: check-progress
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - name: check-progress
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== CHECKING PROGRESS AND ERRORS ==="
+          echo ""
+          echo "1. Testing ingestor-server health..."
+          curl -s http://10.233.51.201:8082/health
+          echo ""
+          echo ""
+          echo "2. Testing collections endpoint..."
+          curl -s http://10.233.51.201:8082/collections
+          echo ""
+          echo ""
+          echo "3. Checking if our task is still processing..."
+          echo "Original task ID: 297ebf11-4dce-4495-b1cb-3004fd967e0d"
+          echo ""
+          echo "4. Testing a new simple document upload..."
+          echo "Test document for progress check" > progress_test.txt
+          response=$(curl -s -X POST http://10.233.51.201:8082/documents \
+            -F "documents=@progress_test.txt" \
+            -F 'data={"collection_name": "progress_test"}')
+          echo "Upload response: $response"
+          echo ""
+          echo "=== PROGRESS CHECK COMPLETE ==="
+      restartPolicy: Never
