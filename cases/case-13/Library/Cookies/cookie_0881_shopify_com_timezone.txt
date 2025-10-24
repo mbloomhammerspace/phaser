@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1787796098	timezone	n8NN65jw_NMF5xcQd--7oGAXv_I7qQB5vW6GNms8cXAZHNj01T3GMjmSEV4I4

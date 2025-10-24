@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1784949729	location_data	u4Z2YALfv98tLjZHbyD7B13mOfnB

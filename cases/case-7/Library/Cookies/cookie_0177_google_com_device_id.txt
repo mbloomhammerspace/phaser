@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+google.com	TRUE	/	FALSE	1775978092	device_id	642675
+# User: StealthyStarWarden

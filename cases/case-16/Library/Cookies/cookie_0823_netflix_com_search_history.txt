@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1782246918	search_history	3QDDlSXg6Wqb4tGLfeRKgaivTYffpjk7lrC0HSs7c1qdYFgvb

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1784603614	auth_token	ExAElPMK0c09h5Y3v0iVixbwmlLC96qW

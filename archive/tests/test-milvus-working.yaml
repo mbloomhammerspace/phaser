@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-milvus-working
+spec:
+  containers:
+  - name: test-milvus
+    image: python:3.12-slim
+    command: ["/bin/bash"]
+    args: ["-c", "pip install pymilvus && python3 -c \"
+from pymilvus import connections, utility, Collection
+try:
+    connections.connect('default', host='10.233.53.224', port=19530)
+    print('✅ Milvus connection successful!')
+    collections = utility.list_collections()
+    print(f'Found {len(collections)} collections:')
+    for i, name in enumerate(collections, 1):
+        print(f'  {i}. {name}')
+    case_collections = [name for name in collections if 'case' in name.lower()]
+    print(f'Found {len(case_collections)} collections with case in name:')
+    for name in case_collections:
+        print(f'  - {name}')
+    if case_collections:
+        print('🔍 Ready to search for travel-related documents in case collections')
+        travel_keywords = ['travel', 'receipt', 'destination', 'trip', 'flight', 'hotel', 'booking', 'itinerary', 'vacation', 'journey']
+        print(f'Travel keywords: {travel_keywords}')
+    else:
+        print('No collections with case found for travel search')
+except Exception as e:
+    print(f'❌ Milvus connection failed: {e}')
+sleep 10
+\""]
+  restartPolicy: Never

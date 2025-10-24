@@ -1,0 +1,46 @@
+from pymilvus import connections, utility, Collection
+
+try:
+    print("Connecting to Milvus...")
+    connections.connect('default', host='10.233.53.224', port=19530)
+    print("✅ Milvus connection successful!")
+    
+    print("\nListing all collections...")
+    collections = utility.list_collections()
+    print(f"Found {len(collections)} collections:")
+    for i, name in enumerate(collections, 1):
+        print(f"  {i}. {name}")
+    
+    # Find collections with 'case' in the name
+    case_collections = [name for name in collections if 'case' in name.lower()]
+    print(f"\nFound {len(case_collections)} collections with 'case' in name:")
+    for name in case_collections:
+        print(f"  - {name}")
+    
+    # Search for travel-related documents in case collections
+    if case_collections:
+        print("\n🔍 Searching for travel-related documents in case collections...")
+        travel_keywords = ['travel', 'receipt', 'destination', 'trip', 'flight', 'hotel', 'booking', 'itinerary', 'vacation', 'journey']
+        
+        for collection_name in case_collections:
+            try:
+                print(f"\n--- Searching in collection: {collection_name} ---")
+                collection = Collection(collection_name)
+                collection.load()
+                print(f"  Collection loaded successfully")
+                print(f"  Number of entities: {collection.num_entities}")
+                
+                # For now, just show that we can access the collection
+                # In a real implementation, we would perform vector search for travel-related content
+                print(f"  Ready to search for travel-related documents")
+                print(f"  Travel keywords to search: {', '.join(travel_keywords)}")
+                        
+            except Exception as e:
+                print(f"  Error accessing collection {collection_name}: {e}")
+    else:
+        print("\nNo collections with 'case' found for travel search")
+        
+except Exception as e:
+    print(f"❌ Milvus connection failed: {e}")
+
+print("\nTest completed!")

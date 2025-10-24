@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1766149938	recent_items	Ari2f_N-1czhalcmgiVXxhKthuQjJ8EvSAGmR

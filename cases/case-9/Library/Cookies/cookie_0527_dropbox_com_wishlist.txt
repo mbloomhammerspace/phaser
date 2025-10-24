@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1764747648	wishlist	fQPso6cZPS1aoavvYAm3QlHcuHiGK69zi0nK5ZN32ZT9RvxH2XzR-n

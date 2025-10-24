@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1769824670	last_visit	1760963967
+# User: StealthyStarWarden

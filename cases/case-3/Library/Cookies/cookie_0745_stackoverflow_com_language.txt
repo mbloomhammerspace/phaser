@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1776309875	language	T4eJPOgi7ExR9yNPki
+# User: GigglesMcCode

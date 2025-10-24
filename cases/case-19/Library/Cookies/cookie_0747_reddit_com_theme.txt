@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+reddit.com	TRUE	/	FALSE	1778774134	theme	25JkQT-8WTwOXXawB8DsGJ4pdDW9g_ne2qEDlhpXSFdLlCqvr08Xj

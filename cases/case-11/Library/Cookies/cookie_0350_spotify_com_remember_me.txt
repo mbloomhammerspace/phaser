@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1772491873	remember_me	L-_9zp5Kr0-4Lym8iztPKcYuOw5eekG0ay2eriLzW80kaS3iC2ZZwYop
+# User: SpookyShadowSpinner

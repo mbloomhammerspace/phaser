@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1773632596	user_id	895651

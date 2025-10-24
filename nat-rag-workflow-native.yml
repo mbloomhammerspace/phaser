@@ -1,0 +1,26 @@
+# NAT Workflow using native nvidia_rag tool
+# This uses the built-in NAT nvidia_rag tool with our RAG server
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: meta/llama-3.1-70b-instruct
+    temperature: 0.0
+
+functions:
+  nvidia_rag_search:
+    _type: nvidia_rag
+    base_url: http://10.0.0.25:30081
+    collection_name: case_1000230
+    top_k: 5
+
+workflow:
+  _type: tool_calling_agent
+  llm_name: nim_llm
+  tool_names: [nvidia_rag_search]
+  verbose: true
+  max_iterations: 3
+
+
+
+

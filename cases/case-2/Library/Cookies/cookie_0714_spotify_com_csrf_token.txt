@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1764870794	csrf_token	hGdVZVeaWbgzZaQgpZ9467EAJaNSJauz

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1787779362	preferences	theme=dark&lang=en&notifications=true

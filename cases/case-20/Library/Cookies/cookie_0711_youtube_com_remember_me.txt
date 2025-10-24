@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1772920737	remember_me	duA_WMf__A

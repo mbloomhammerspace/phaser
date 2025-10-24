@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1764898731	search_history	Y-ZYKcfFfKI05fVX5J6Ue3EovG-RrIh

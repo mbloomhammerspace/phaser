@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1763039486	location_data	XW_g3Y1p8phlqHFn3oYbRZMkvx6bnRpnIBzFMnyISlhjPTQHApH8

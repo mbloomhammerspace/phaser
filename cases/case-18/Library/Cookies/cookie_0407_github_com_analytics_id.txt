@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1784133948	analytics_id	GA1.2.407486693.1760978948
+# User: GigglesMcCode

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1792031399	user_id	203030

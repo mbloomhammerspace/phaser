@@ -1,0 +1,25 @@
+functions:
+  rag_search:
+    _type: nvidia_rag
+    # Your RAG Blueprint service - uses /generate endpoint internally
+    base_url: ${RAG_BASE_URL:-"http://10.0.0.25:30081"}
+    collection_name: ${RAG_COLLECTION:-"case_1000230"}
+    top_k: ${RAG_TOP_K:-5}
+    # These are used by our modified nvidia_rag tool for /generate endpoint
+    max_tokens: ${RAG_MAX_TOKENS:-2000}
+    temperature: ${RAG_TEMPERATURE:-0.1}
+
+llms:
+  # Whatever model your agent uses for reasoning/tool orchestration
+  openai_llm:
+    _type: openai
+    model_name: gpt-4o-mini
+    # If you're not using OpenAI, you can omit api_key or set a dummy;
+    # NAT allows a base_url override for OpenAI-compatible servers.
+    api_key: ${OPENAI_API_KEY:-"nvidia"}
+    base_url: ${OPENAI_BASE_URL:-""}
+
+workflow:
+  _type: chat_completion
+  llm_name: openai_llm
+  verbose: true

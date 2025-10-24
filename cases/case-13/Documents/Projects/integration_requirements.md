@@ -1,0 +1,7 @@
+# Integration Requirements.Md
+
+Theme: enterprise
+Project Type: integration
+Created: 2024-12-15
+
+This document contains project-specific information.

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1765218481	csrf_token	9ty374oFU0qGwPhZpru2rCB27Gn0i4kR

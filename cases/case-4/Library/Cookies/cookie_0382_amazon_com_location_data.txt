@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1791898657	location_data	jYts0UsazHAGEnhlPyV_6yUWjtGxmouL6vyoJ5Yb4j6JNCsBT7mZZYjcRIWg

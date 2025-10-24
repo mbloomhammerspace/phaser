@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1770543497	session_id	EF4x5kacSWGyEghOvVHILWjoCjQmYaZy

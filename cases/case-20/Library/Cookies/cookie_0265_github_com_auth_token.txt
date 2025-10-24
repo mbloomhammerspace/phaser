@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1790727408	auth_token	G8NmTDi4yXNzbwmkDqMRZB7oHKeSgxt8

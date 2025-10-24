@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1779685229	language	_BlEF_aiV0ut8qkEkRSB6Tm1Q3q

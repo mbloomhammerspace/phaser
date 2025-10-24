@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1791098916	wishlist	T6b1_4GCFyf

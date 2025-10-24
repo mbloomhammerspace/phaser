@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1791451295	theme	NqNMDWRKoWL0dKzhR7MB_7nBVQGT62CvvfN7MQk-XCgJcmiMJqolaQifn7Rp8

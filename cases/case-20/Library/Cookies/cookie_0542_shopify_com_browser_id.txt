@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1778654736	browser_id	735127
+# User: SpookyShadowSpinner

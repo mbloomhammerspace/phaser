@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: file-copy-pod
+  namespace: default
+spec:
+  nodeName: instance-20251003-1851  # The node where RAG server is running
+  containers:
+  - name: file-copy
+    image: busybox
+    command: ['sleep', '3600']
+    volumeMounts:
+    - name: scripts
+      mountPath: /scripts
+  volumes:
+  - name: scripts
+    hostPath:
+      path: /tmp/scripts

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1785434482	location_data	qe-Teqp_OHzngFAKnR5p3P1A5u8XIdBMW8p_S_0T

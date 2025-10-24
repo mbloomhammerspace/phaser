@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1772139096	theme	rcgZJ379Hby-n6q-HlfDAtmhI3ysJ3EDI2xSinPCW7hoKo

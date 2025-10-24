@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+reddit.com	TRUE	/	FALSE	1791931306	analytics_id	GA1.2.112900752.1760978948

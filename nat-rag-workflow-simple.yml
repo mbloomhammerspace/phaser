@@ -1,0 +1,22 @@
+# Simple NAT Workflow using RAG Pipeline
+# This workflow uses our custom RAG wrapper functions
+
+functions:
+  rag_search:
+    _type: nat_rag_wrapper.rag_search_function
+    collection: case_1000230
+    
+  rag_multi_search:
+    _type: nat_rag_wrapper.rag_multi_search_function
+    collections: [case_1000230, case_1000231, case_1000232]
+
+workflow:
+  _type: tool_calling_agent
+  llm_name: nim_llm
+  tool_names: [rag_search, rag_multi_search]
+  verbose: true
+  max_iterations: 3
+
+
+
+

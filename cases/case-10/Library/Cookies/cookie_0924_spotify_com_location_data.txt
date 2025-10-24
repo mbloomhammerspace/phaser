@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1779724574	location_data	Sf2t5Gyly8c_i6HPpqXTwBNUxOMJqqsHkHe9BeSOoggoA9AULrOyQe

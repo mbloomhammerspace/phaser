@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1785495026	preferences	theme=dark&lang=en&notifications=true

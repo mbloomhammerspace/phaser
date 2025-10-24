@@ -1,0 +1,47 @@
+functions:
+  # RAG search through the working pipeline
+  rag_search:
+    _type: nvidia_rag
+    base_url: "http://10.0.0.25:30081"
+    endpoint: "/generate"
+    collection_names: ["case_1000230"]
+    use_knowledge_base: true
+    max_tokens: 2000
+    temperature: 0.1
+
+  # Python-based RAG connector (backup)
+  rag_connector:
+    _type: python_function
+    function_name: "search_rag_pipeline"
+    module_path: "/app/nat-rag-integration.py"
+    description: "Search collections through RAG pipeline"
+
+  # Current datetime for context
+  current_datetime:
+    _type: current_datetime
+
+  # Travel analysis function
+  travel_analyzer:
+    _type: python_function
+    function_name: "analyze_travel_data"
+    description: "Analyze travel and expense data for anomalies"
+
+llms:
+  # Use local NIM if available
+  nim_llm:
+    _type: nim
+    model_name: meta/llama-3.1-70b-instruct
+    temperature: 0.0
+    base_url: "https://integrate.api.nvidia.com/v1"
+
+workflow:
+  # Use an agent that can search and analyze documents
+  _type: react_agent
+  # Give it access to RAG search tools
+  tool_names: [rag_search, rag_connector, current_datetime, travel_analyzer]
+  # Tell it which LLM to use
+  llm_name: nim_llm
+  # Make it verbose for better understanding
+  verbose: true
+  # Retry up to 3 times for reliability
+  parse_agent_response_max_retries: 3

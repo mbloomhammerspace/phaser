@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1777861067	auth_token	a13XL1v3OyMU9A8oaP8CvHIuBDFDuGAl

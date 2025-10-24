@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1791082792	search_history	xNmwzntq7ryKGWvELNkXKIXAwIdrur9Eu9Sk7

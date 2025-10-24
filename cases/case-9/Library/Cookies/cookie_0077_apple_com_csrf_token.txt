@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1763862823	csrf_token	kznc8HVv6zhs2AFqxBMaK9A6zxHY36kS

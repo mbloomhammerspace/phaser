@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1770792611	theme	k4ieGoaFLkPAF2MHIDM_a1j2bycGHHRvwJsH9iqj4Q4Rbr

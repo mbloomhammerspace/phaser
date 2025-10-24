@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1781583742	preferences	theme=dark&lang=en&notifications=true

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+linkedin.com	TRUE	/	FALSE	1788296127	browser_id	176840

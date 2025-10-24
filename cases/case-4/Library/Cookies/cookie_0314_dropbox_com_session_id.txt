@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1766834140	session_id	IKva8nQXs9nyfvfkNc6du3YQnxcjElZ9

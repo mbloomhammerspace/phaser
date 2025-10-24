@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1774286842	user_id	794512

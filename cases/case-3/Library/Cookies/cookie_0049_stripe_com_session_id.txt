@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1790213150	session_id	GsQ0yJqxqPap5MtxVrTNaKCUocW0Jt0t
+# User: GigglesMcCode

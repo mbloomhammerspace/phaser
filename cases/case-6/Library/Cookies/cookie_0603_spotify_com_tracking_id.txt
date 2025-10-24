@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1769114575	tracking_id	5laKpj9iTJ8svT4SmygYqo0VPqIwNPMjEufE-tqRTHFp7y-GfC2MN0dj

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1790659674	session_id	UxcEZ0jBL8EybTZLR6vM53tsLS93LKDR

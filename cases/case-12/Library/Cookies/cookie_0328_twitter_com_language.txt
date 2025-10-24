@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1764848205	language	Bx1TndHR3yDEWBUlI6otsqI57y946TXlzG8hHSoeCW8Pl

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1766975533	wishlist	PHAt37-sBBwP25c-B_TL0FbPbg4pN0iaoMWUpYxgIWpXCxptdS5OIM_qc4t76

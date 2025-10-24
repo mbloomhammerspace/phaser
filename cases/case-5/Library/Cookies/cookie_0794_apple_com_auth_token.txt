@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1776147335	auth_token	7FjM3QeMMx0XrgDA2zeWti90qf4zlx3r

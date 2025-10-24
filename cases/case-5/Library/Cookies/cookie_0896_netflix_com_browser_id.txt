@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1786564382	browser_id	996856

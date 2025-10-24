@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1777576586	ad_id	2Q3nXWysFeZHZbpYs6xy3jqZr17hoRhl51ebs8wQ8hmm0PVXv4vfq7a133i

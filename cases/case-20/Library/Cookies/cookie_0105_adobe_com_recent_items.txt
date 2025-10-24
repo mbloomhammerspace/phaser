@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1790465831	recent_items	kcxRSZTl_NzualNJumRDbzDan3WaHMob4R7XnfZ1

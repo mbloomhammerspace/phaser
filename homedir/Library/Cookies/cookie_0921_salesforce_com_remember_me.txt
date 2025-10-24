@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1784586219	remember_me	hstRzMJ9LPrpEHEKFA1AhDpyVICGSz8iEJztD4K3TmjBxUf9FJUvKF5b_-r8EAHd

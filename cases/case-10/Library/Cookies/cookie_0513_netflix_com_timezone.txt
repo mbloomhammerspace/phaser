@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1769397165	timezone	bkUEnhNsVeVmw5-OxT42eGZxc

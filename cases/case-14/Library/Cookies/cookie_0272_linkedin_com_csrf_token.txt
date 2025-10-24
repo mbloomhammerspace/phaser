@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+linkedin.com	TRUE	/	FALSE	1789926135	csrf_token	nvR5mkgjUbEmnmGVEpWvlejdnZfn1U1d

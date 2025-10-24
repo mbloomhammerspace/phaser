@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+linkedin.com	TRUE	/	FALSE	1783422483	wishlist	bkDFI7OjUY2nUq6BpqZve8B3LTFR

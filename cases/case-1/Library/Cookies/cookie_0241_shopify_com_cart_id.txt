@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1778148893	cart_id	zujzzYkd1Wj2KP5TFA57Gz2M-ixDhnvHEXFpDYmi6-p2Pi_DY53sAp

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1774956750	location_data	pxRzuLl4qut5HKuA6UqEx7NEN5avZ6hA90qR8LdKbLERawfJ6ES4aEAfSb6ZNnB

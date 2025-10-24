@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1772567365	wishlist	TI_HK99JRuQ7q9zC_vZORqQA4UJJLUXWr-Ha35TERguCOy5
+# User: StealthyStarWarden

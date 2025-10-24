@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1767570350	csrf_token	ucdW6AfnBOlKDm4OKgiEqahYcVYaFvoz

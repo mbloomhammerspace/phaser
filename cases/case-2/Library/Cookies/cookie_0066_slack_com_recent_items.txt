@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1784049311	recent_items	s8z4C2nF9xa3mzMI_PLkrIrUVGA

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1774497155	analytics_id	GA1.2.299786154.1760978948

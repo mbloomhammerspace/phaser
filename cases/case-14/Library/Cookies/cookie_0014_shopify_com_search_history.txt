@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1779728526	search_history	neHGtc_TZufS0hKCds-VV5SVpG9lbPn-zwaBLS

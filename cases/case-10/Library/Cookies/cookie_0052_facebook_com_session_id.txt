@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1779595739	session_id	UTbv6fvS8d4u6aemMp7VzwWJUHHImPjT

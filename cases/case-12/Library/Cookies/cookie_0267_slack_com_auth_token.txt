@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1787860933	auth_token	Fg3gmtqT3ZenrB1bdHczkbrKvTuRQ3Ne

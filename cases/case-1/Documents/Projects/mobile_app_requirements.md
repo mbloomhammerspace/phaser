@@ -1,0 +1,7 @@
+# Mobile App Requirements.Md
+
+Theme: finance
+Project Type: mobile_app
+Created: 2024-12-15
+
+This document contains project-specific information.

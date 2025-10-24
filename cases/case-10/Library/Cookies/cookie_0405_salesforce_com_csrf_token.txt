@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1776840284	csrf_token	0Sd3hzHOT5WYCWKJ5Su4SIIzFJb694VX

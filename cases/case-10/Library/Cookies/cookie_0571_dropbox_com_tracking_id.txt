@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1767263169	tracking_id	PGdnjEgQzAG4ddNGplC_aBIYFGBiU-rFA7bQbmnnFTbT8

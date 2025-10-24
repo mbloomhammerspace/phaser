@@ -1,0 +1,78 @@
+{
+  "application": {
+    "name": "Enterprise Dashboard",
+    "version": "2.1.4",
+    "environment": "production",
+    "debug": false
+  },
+  "database": {
+    "host": "db.company.com",
+    "port": 5432,
+    "name": "enterprise_db",
+    "username": "app_user",
+    "ssl": true,
+    "pool_size": 20,
+    "timeout": 30
+  },
+  "redis": {
+    "host": "redis.company.com",
+    "port": 6379,
+    "password": "encrypted_password_here",
+    "db": 0,
+    "timeout": 5
+  },
+  "api": {
+    "base_url": "https://api.company.com/v2",
+    "timeout": 30,
+    "retry_attempts": 3,
+    "rate_limit": {
+      "requests_per_minute": 1000,
+      "burst_limit": 200
+    }
+  },
+  "authentication": {
+    "jwt_secret": "super_secret_key_here",
+    "token_expiry": 3600,
+    "refresh_token_expiry": 86400,
+    "password_min_length": 8,
+    "require_special_chars": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file_path": "/var/log/app.log",
+    "max_size": "100MB",
+    "backup_count": 5,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "features": {
+    "enable_analytics": true,
+    "enable_notifications": true,
+    "enable_export": true,
+    "enable_api": true,
+    "maintenance_mode": false
+  },
+  "integrations": {
+    "stripe": {
+      "enabled": true,
+      "public_key": "pk_live_...",
+      "secret_key": "sk_live_..."
+    },
+    "sendgrid": {
+      "enabled": true,
+      "api_key": "SG.abc123...",
+      "from_email": "noreply@company.com"
+    },
+    "slack": {
+      "enabled": true,
+      "webhook_url": "https://hooks.slack.com/services/...",
+      "channel": "#alerts"
+    }
+  },
+  "team_members": {
+    "security_lead": "CipherSlyFox",
+    "frontend_lead": "SpookyShadowSpinner",
+    "devops_lead": "StealthyStarWarden",
+    "qa_lead": "GigglesMcCode",
+    "architect": "AgentWhiskerTwist"
+  }
+}

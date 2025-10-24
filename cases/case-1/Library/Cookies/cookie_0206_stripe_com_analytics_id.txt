@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1784037660	analytics_id	GA1.2.747677702.1760978948
+# User: AgentWhiskerTwist

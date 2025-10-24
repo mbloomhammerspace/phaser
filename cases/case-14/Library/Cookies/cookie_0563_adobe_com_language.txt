@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1771816485	language	m4BRNLUeV2oWFtcLL-rKvI4L1Fyv5TYwq0weW1hAlsJMkV2YHIteKZZC

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1767458459	search_history	s4hPcMi3RE0oQzipGkOu8HSFrpIY04btQhIvzyzu08

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1771366118	session_id	Ku1C9ndSoA67zLoNynwsWGMuAgepAU4Q

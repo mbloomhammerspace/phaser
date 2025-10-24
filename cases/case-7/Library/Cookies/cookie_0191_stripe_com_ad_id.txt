@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1770304780	ad_id	IpiFBooNU7-nTBaS6kmt7Yee5UQNh3ALtth_7jP8MNN8

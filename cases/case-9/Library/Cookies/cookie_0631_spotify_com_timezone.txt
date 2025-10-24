@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1780469500	timezone	pcH84MbVBMlWP51p2PQvM_PwH4ucOmkFwJGqwupLUCNMLGTgy24F8i-QAQC5RWkb

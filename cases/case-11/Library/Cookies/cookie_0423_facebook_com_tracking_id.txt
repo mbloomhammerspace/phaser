@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1783480686	tracking_id	YktQJC_1rZwCVmrGy0LdC1b8irSlRG
+# User: SpookyShadowSpinner

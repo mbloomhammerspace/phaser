@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nim-aiq
+  labels:
+    app: nim-aiq
+spec:
+  serviceName: nim-aiq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nim-aiq
+  template:
+    metadata:
+      labels:
+        app: nim-aiq
+    spec:
+      containers:
+      - name: aiq-nim
+        image: nvcr.io/nim/nvidia/llama-3.3-nemotron-super-49b-v1:1.8.5
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-api
+              key: NGC_API_KEY
+        - name: NIM_CACHE_PATH
+          value: "/modelstore/models"
+        resources:
+          limits:
+            nvidia.com/gpu: 2
+          requests:
+            nvidia.com/gpu: 2
+        volumeMounts:
+        - name: modelstore
+          mountPath: /modelstore
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: modelstore
+        persistentVolumeClaim:
+          claimName: hammerspace-modelstore-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-aiq
+  labels:
+    app: nim-aiq
+spec:
+  selector:
+    app: nim-aiq
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP

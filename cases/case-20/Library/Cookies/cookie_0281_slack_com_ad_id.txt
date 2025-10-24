@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1772517968	ad_id	n_PDq8rtxPqnc9AxfQtxlMfV0WF_SKTPZJ7pchMsimNZhmWcy

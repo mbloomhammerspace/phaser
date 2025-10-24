@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1790015050	timezone	Cw8kL-1pI55iO2Km5JYxV9tR03DLMXGRFH198rZYepqw2E3z4Cx

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1764990911	cart_id	2zdXvnFzaqs8xG6rV8J0oS

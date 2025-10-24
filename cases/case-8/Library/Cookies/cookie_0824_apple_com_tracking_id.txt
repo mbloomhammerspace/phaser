@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1772905818	tracking_id	AS2XsBXR6cOyETaA7-B6Lj1

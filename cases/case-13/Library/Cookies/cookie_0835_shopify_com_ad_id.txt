@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1761221616	ad_id	9grs25-4S68d1ZHQ9P7NWIJXZFRN9mivEie5U_DC4X5c1FERlkDk3zCl4UKyPGW4

@@ -1,0 +1,116 @@
+# NAT Workflow with RAG Pipeline Integration
+# This workflow uses our custom RAG wrapper functions
+
+name: "rag_pipeline_workflow"
+description: "Workflow that integrates with RAG pipeline for document search and analysis"
+
+# Define custom functions that wrap our RAG pipeline
+functions:
+  - name: "rag_document_search"
+    description: "Search documents in a specific collection using RAG pipeline"
+    parameters:
+      type: "object"
+      properties:
+        query:
+          type: "string"
+          description: "The search query to find relevant documents"
+        collection:
+          type: "string"
+          description: "The collection name to search in"
+          default: "case_1000230"
+        max_tokens:
+          type: "integer"
+          description: "Maximum tokens for the response"
+          default: 2000
+      required: ["query"]
+    implementation: |
+      import sys
+      sys.path.append('/app')
+      from nat_rag_wrapper import rag_search_function
+      return rag_search_function(query, collection)
+  
+  - name: "rag_multi_collection_search"
+    description: "Search across multiple collections using RAG pipeline"
+    parameters:
+      type: "object"
+      properties:
+        query:
+          type: "string"
+          description: "The search query to find relevant documents"
+        collections:
+          type: "array"
+          items:
+            type: "string"
+          description: "List of collection names to search"
+          default: ["case_1000230", "case_1000231", "case_1000232"]
+      required: ["query"]
+    implementation: |
+      import sys
+      sys.path.append('/app')
+      from nat_rag_wrapper import rag_multi_search_function
+      return rag_multi_search_function(query, collections)
+
+# Define the main workflow
+workflow:
+  name: "rag_analysis_workflow"
+  description: "Analyze documents using RAG pipeline with multiple search strategies"
+  
+  steps:
+    - name: "initial_search"
+      type: "function_call"
+      function: "rag_document_search"
+      parameters:
+        query: "{{ user_query }}"
+        collection: "case_1000230"
+    
+    - name: "multi_collection_search"
+      type: "function_call"
+      function: "rag_multi_collection_search"
+      parameters:
+        query: "{{ user_query }}"
+        collections: ["case_1000230", "case_1000231", "case_1000232", "case_1000233", "case_1000234"]
+    
+    - name: "analysis_synthesis"
+      type: "llm_call"
+      model: "nim-llm"
+      prompt: |
+        Based on the search results from multiple collections, provide a comprehensive analysis:
+        
+        Initial Search Results:
+        {{ initial_search.result }}
+        
+        Multi-Collection Results:
+        {{ multi_collection_search.result }}
+        
+        Please synthesize these findings and provide insights on:
+        1. Key patterns and anomalies
+        2. Travel and expense patterns
+        3. Any unusual transactions or activities
+        4. Recommendations for further investigation
+        
+        Be specific and cite relevant documents from the search results.
+
+# Define input/output schema
+input_schema:
+  type: "object"
+  properties:
+    user_query:
+      type: "string"
+      description: "The user's search query or analysis request"
+  required: ["user_query"]
+
+output_schema:
+  type: "object"
+  properties:
+    initial_search_result:
+      type: "string"
+      description: "Results from the initial single-collection search"
+    multi_collection_results:
+      type: "string"
+      description: "Results from the multi-collection search"
+    synthesis_analysis:
+      type: "string"
+      description: "LLM synthesis of all search results"
+    total_collections_searched:
+      type: "integer"
+      description: "Number of collections that were successfully searched"

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1782515383	cart_id	fVnWPBzKyqf9SofAxNX1KsIxyn29ea2gbO0zRB-F45uQTNws

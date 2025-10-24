@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1791709847	auth_token	gIvHoUNsBqQZCyvCvCZNwJ7Lt2QZScFb

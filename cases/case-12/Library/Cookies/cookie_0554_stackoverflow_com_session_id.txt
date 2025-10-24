@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1790694693	session_id	2ix84CmVnI5Ty2d4DzJFrFx1KuOhQPWX

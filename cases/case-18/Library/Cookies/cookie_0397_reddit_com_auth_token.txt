@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+reddit.com	TRUE	/	FALSE	1769590766	auth_token	v0K3XNrIsatgYOFezpcP5ZLKrmqStSWW

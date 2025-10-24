@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<enterprise_data>
+  <metadata>
+    <created_date>2024-12-15T10:30:00Z</created_date>
+    <version>1.0</version>
+    <author>System Administrator</author>
+    <description>Enterprise data export for Q4 2024</description>
+  </metadata>
+  
+  <departments>
+    <department id="dept_001">
+      <name>Engineering</name>
+      <head>Alice Johnson</head>
+      <lead_developer>AgentWhiskerTwist</lead_developer>
+      <employee_count>25</employee_count>
+      <budget>2500000</budget>
+      <location>San Francisco, CA</location>
+    </department>
+    
+    <department id="dept_002">
+      <name>Marketing</name>
+      <head>Bob Smith</head>
+      <creative_director>AgentWhiskerTwist</creative_director>
+      <employee_count>12</employee_count>
+      <budget>1200000</budget>
+      <location>New York, NY</location>
+    </department>
+    
+    <department id="dept_003">
+      <name>Sales</name>
+      <head>Carol Davis</head>
+      <employee_count>18</employee_count>
+      <budget>1800000</budget>
+      <location>Chicago, IL</location>
+    </department>
+    
+    <department id="dept_004">
+      <name>Human Resources</name>
+      <head>David Wilson</head>
+      <employee_count>8</employee_count>
+      <budget>800000</budget>
+      <location>Austin, TX</location>
+    </department>
+  </departments>
+  
+  <projects>
+    <project id="proj_001">
+      <name>Website Redesign</name>
+      <status>In Progress</status>
+      <priority>High</priority>
+      <start_date>2024-01-15</start_date>
+      <end_date>2024-03-30</end_date>
+      <budget>500000</budget>
+      <team_lead>Alice Johnson</team_lead>
+      <tech_lead>AgentWhiskerTwist</tech_lead>
+      <department>Engineering</department>
+    </project>
+    
+    <project id="proj_002">
+      <name>Mobile App Development</name>
+      <status>Planning</status>
+      <priority>High</priority>
+      <start_date>2024-02-01</start_date>
+      <end_date>2024-06-15</end_date>
+      <budget>1000000</budget>
+      <team_lead>Bob Smith</team_lead>
+      <department>Engineering</department>
+    </project>
+    
+    <project id="proj_003">
+      <name>Brand Campaign</name>
+      <status>Completed</status>
+      <priority>Medium</priority>
+      <start_date>2023-11-01</start_date>
+      <end_date>2024-01-15</end_date>
+      <budget>250000</budget>
+      <team_lead>Carol Davis</team_lead>
+      <department>Marketing</department>
+    </project>
+  </projects>
+  
+  <financial_summary>
+    <quarter>Q4 2024</quarter>
+    <total_revenue>2450000</total_revenue>
+    <total_expenses>1800000</total_expenses>
+    <net_profit>650000</net_profit>
+    <profit_margin>26.5</profit_margin>
+    <growth_rate>12.3</growth_rate>
+  </financial_summary>
+</enterprise_data>

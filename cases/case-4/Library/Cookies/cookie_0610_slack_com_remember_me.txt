@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1773732490	remember_me	etCE4AHhhm8DXnPlTLghVt_KzGpiwPK-LxCH6SUAVT5ELdZbOjcQhNA-8MNNgzdS

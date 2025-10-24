@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1790819876	tracking_id	aP5t4uXWhf7V6ZNURV7IhQ_9VO_jic7mdPGchT_zuaf4NsknOidA

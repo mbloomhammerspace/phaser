@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1791513978	theme	e02YhiQ6MAueAaGF4YWPBlDsqigUseMHzrZ_gW6DUTcUEP
+# User: CipherSlyFox

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1763676321	auth_token	MKQzUu84f6m9u5UQzEtGnoB3cFAESjM8

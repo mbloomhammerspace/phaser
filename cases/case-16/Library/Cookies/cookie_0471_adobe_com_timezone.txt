@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1774655940	timezone	WpQwT0nGiUXd1LC-ZqyWzrXunsWTLbMitxVuP9SpxFiONdNu-A1G9rEv6gJYTP

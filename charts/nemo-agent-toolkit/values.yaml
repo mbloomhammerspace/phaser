@@ -1,0 +1,151 @@
+# Default values for nemo-agent-toolkit
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: python
+  tag: "3.12-slim"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: nemo-agent-toolkit.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: nemo-agent-toolkit-tls
+  #    hosts:
+  #      - nemo-agent-toolkit.local
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# NeMo Agent Toolkit specific configuration
+nemoAgent:
+  # API Key for NVIDIA services
+  nvidiaApiKey: ""
+  
+  # Workflow configuration
+  workflow:
+    # Default workflow file content
+    config: |
+      functions:
+        wikipedia_search:
+          _type: wiki_search
+          max_results: 2
+      
+      llms:
+        nim_llm:
+          _type: nim
+          model_name: meta/llama-3.1-70b-instruct
+          temperature: 0.0
+      
+      workflow:
+        _type: react_agent
+        tool_names: [wikipedia_search]
+        llm_name: nim_llm
+        verbose: true
+        parse_agent_response_max_retries: 3
+  
+  # Environment variables
+  env:
+    NVIDIA_API_KEY: ""
+    PYTHONPATH: "/app"
+    NAT_LOG_LEVEL: "INFO"
+  
+  # Volume mounts for persistent data
+  volumes:
+    - name: workflow-data
+      mountPath: /app/workflows
+      subPath: workflows
+    - name: cache-data
+      mountPath: /app/cache
+      subPath: cache
+
+# Persistent volumes
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# MCP (Model Context Protocol) configuration
+mcp:
+  enabled: true
+  port: 8001
+  config:
+    servers:
+      - name: "nemo-agent-server"
+        command: "nat"
+        args: ["run", "--config_file", "/app/workflows/workflow.yml"]
+        env:
+          NVIDIA_API_KEY: ""
+
+# Observability configuration
+observability:
+  enabled: true
+  otel:
+    enabled: true
+    endpoint: "http://otel-collector:4317"
+  metrics:
+    enabled: true
+    port: 9090
+  tracing:
+    enabled: true
+    serviceName: "nemo-agent-toolkit"

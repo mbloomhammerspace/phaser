@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1783297701	ad_id	D4dzu0WEm4aMtNRq_tD2DIyqOdu0SpPFNgx6e_b4vga6k5Dem-p0hLIpfpE

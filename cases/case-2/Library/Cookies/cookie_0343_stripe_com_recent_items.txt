@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1787413433	recent_items	DJrGF7-mb7M8MkQB5RByOM8jTSzhlLN-g413nwx_hHMd8UcGObHHC8s

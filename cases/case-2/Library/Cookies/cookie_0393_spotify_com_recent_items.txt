@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1765469527	recent_items	07Ms__8ER_ZVGDzkubPYB689ncHItZtwSJEUMkQfSApIVISCBsa

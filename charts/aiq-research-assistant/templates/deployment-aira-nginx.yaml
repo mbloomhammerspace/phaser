@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-aiq-aira-nginx
+  name: {{ .Release.Name }}-aira-nginx
   labels:
     app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
     app.kubernetes.io/component: aira-nginx
@@ -39,12 +39,12 @@ spec:
       volumes:
         - name: nginx-conf
           configMap:
-            name: {{ .Release.Name }}-aiq-aira-nginx
+            name: {{ .Release.Name }}-aira-nginx
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-aiq-aira-nginx
+  name: {{ .Release.Name }}-aira-nginx
   labels:
     app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
     app.kubernetes.io/component: aira-nginx
@@ -53,8 +53,8 @@ data:
   nginx.conf: |
     events {}
     http {
-      upstream aira_backend { server {{ .Values.airaNginx.env.AIRA_BASE_URL | trimPrefix "http://" }}; }
-      upstream aira_frontend { server {{ .Release.Name }}-aiq-frontend:{{ .Values.frontend.service.port }}; }
+      upstream aira_backend { server {{ .Release.Name }}-aira-backend:3838; }
+      upstream aira_frontend { server {{ .Release.Name }}-frontend:{{ .Values.frontend.service.port }}; }
       
       server {
         listen 8051;
@@ -104,6 +104,27 @@ data:
                 return 200 '{"status": "success", "message": "Logged out successfully"}';
               }
               return 200 '{"status": "success", "message": "Logged out successfully"}';
+              add_header Content-Type application/json;
+            }
+            
+            # Handle collections endpoint that frontend might expect
+            location /api/proxy/v2/predict/stateful/collections {
+              proxy_pass http://aira_backend/default_collections;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Handle status endpoint that frontend might expect
+            location /api/proxy/v2/predict/stateful/status {
+              return 200 '{"status": "ready", "collections": []}';
+              add_header Content-Type application/json;
+            }
+            
+            # Handle health endpoint that frontend might expect
+            location /api/proxy/v2/predict/stateful/health {
+              return 200 '{"status": "healthy"}';
               add_header Content-Type application/json;
             }
             
@@ -176,7 +197,7 @@ data:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-aiq-aira-nginx
+  name: {{ .Release.Name }}-aira-nginx
   labels:
     app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
     app.kubernetes.io/component: aira-nginx

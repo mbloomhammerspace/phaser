@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1765752809	location_data	NMM3S1UmJr79THCZNKpZCl-BvM3aueFTwVg3nG

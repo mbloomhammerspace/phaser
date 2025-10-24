@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1776038649	timezone	M7-B1adHixb6gh5VM2fhAnM1YY

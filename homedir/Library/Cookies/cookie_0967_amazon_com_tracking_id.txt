@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1776323679	tracking_id	QCs0hY-h8WUMSuvFz-uhf_gAQe

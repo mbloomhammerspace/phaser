@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1769058680	recent_items	6nMhbVjHQISi39Glh6-QLHZ4GYvKS2rAwLl2L95kn

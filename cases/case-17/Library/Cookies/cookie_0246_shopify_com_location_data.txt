@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1766352959	location_data	63Gh_35pL3qFfxxDafql5mb1hNytoBFEB

@@ -26,7 +26,7 @@ airaBackend:
     AIRA_APPLY_GUARDRAIL: "false"
     AIRA_HOSTED_NIMS: "true"
     OPENAI_API_KEY: "NVIDIA_API_KEY"
-    OPENAI_BASE_URL: "http://nim-llm:8000/v1"
+    OPENAI_BASE_URL: "http://aira-instruct-llm:8000/v1"
     OPENAI_MODEL: "meta/llama-3.3-70b-instruct"
   resources: {}
 
@@ -56,105 +56,32 @@ frontend:
     type: ClusterIP
     port: 3001
   env:
-    NVWB_TRIM_PREFIX: "false"
+    NVWB_TRIM_PREFIX: "true"
     INFERENCE_ORIGIN: "http://localhost:8051"
-    NEXT_PUBLIC_INFERENCE_ORIGIN: "http://localhost:8051"
-    NODE_ENV: "development"
-    NEXT_TELEMETRY_DISABLED: "1"
-    NEXT_PUBLIC_APP_ENV: "development"
-    NEXT_PUBLIC_APP_VERSION: "1.0.0"
-    NEXT_PUBLIC_RUNTIME_URL: "runtime"
-    NEXT_PUBLIC_ASSETS_PATH: "/artifacts"
-    NEXT_PUBLIC_ASSETS_CDN_URL: "https://assets.ngc.nvidia.com"
-    NEXT_PUBLIC_ENDPOINTS_ORG: "qc69jvmznzxy"
-    NEXT_PUBLIC_CAS_HOST: "api.ngc.nvidia.com"
-    NEXT_PUBLIC_CAS_PATH: "https://api.ngc.nvidia.com"
-    NEXT_PUBLIC_APP_HOST: "build.nvidia.com"
-    NEXT_PUBLIC_APP_URL: "https://build.nvidia.com"
-    PORT: "3001"
-    HOSTNAME: "0.0.0.0"
-    NEXT_PUBLIC_API_URL: "http://localhost:8051"
-    API_URL: "http://localhost:8051"
-    NEXT_PUBLIC_BASE_URL: "http://localhost:8051"
-    BASE_URL: "http://localhost:8051"
+    NODE_ENV: "production"
+    NEXT_PUBLIC_APP_ENV: "production"
     NEXT_PUBLIC_APP_URL: "http://localhost:8051"
-    APP_URL: "http://localhost:8051"
-    NEXT_PUBLIC_SERVER_URL: "http://localhost:8051"
-    SERVER_URL: "http://localhost:8051"
-    NEXT_PUBLIC_BACKEND_URL: "http://localhost:8051"
-    BACKEND_URL: "http://localhost:8051"
-    NEXT_PUBLIC_CLIENT_URL: "http://localhost:8051"
-    CLIENT_URL: "http://localhost:8051"
-    NEXT_PUBLIC_HOST: "localhost"
-    HOST: "localhost"
-    NEXT_PUBLIC_PORT: "8051"
-    PUBLIC_PORT: "8051"
-    NEXT_PUBLIC_DOMAIN: "localhost"
-    DOMAIN: "localhost"
-    NEXT_PUBLIC_ORIGIN: "http://localhost:8051"
-    ORIGIN: "http://localhost:8051"
-    NEXT_PUBLIC_URL: "http://localhost:8051"
-    URL: "http://localhost:8051"
-    NEXT_PUBLIC_ENDPOINT: "http://localhost:8051"
-    ENDPOINT: "http://localhost:8051"
-    NEXT_PUBLIC_SERVICE_URL: "http://localhost:8051"
-    SERVICE_URL: "http://localhost:8051"
-    NEXT_PUBLIC_GATEWAY_URL: "http://localhost:8051"
-    GATEWAY_URL: "http://localhost:8051"
-    NEXT_PUBLIC_PROXY_URL: "http://localhost:8051"
-    PROXY_URL: "http://localhost:8051"
-    NEXT_PUBLIC_INGRESS_URL: "http://localhost:8051"
-    INGRESS_URL: "http://localhost:8051"
-    NEXT_PUBLIC_ROUTER_URL: "http://localhost:8051"
-    ROUTER_URL: "http://localhost:8051"
-    NEXT_PUBLIC_BRIDGE_URL: "http://localhost:8051"
-    BRIDGE_URL: "http://localhost:8051"
-    NEXT_PUBLIC_TUNNEL_URL: "http://localhost:8051"
-    TUNNEL_URL: "http://localhost:8051"
-    NEXT_PUBLIC_CONNECTOR_URL: "http://localhost:8051"
-    CONNECTOR_URL: "http://localhost:8051"
-    NEXT_PUBLIC_LINK_URL: "http://localhost:8051"
-    LINK_URL: "http://localhost:8051"
-    NEXT_PUBLIC_CHANNEL_URL: "http://localhost:8051"
-    CHANNEL_URL: "http://localhost:8051"
-    NEXT_PUBLIC_PATH_URL: "http://localhost:8051"
-    PATH_URL: "http://localhost:8051"
-    NEXT_PUBLIC_ROUTE_URL: "http://localhost:8051"
-    ROUTE_URL: "http://localhost:8051"
-    NEXT_PUBLIC_NETWORK_URL: "http://localhost:8051"
-    NETWORK_URL: "http://localhost:8051"
-    NEXT_PUBLIC_CONNECTION_URL: "http://localhost:8051"
-    CONNECTION_URL: "http://localhost:8051"
-    NEXT_PUBLIC_INTERFACE_URL: "http://localhost:8051"
-    INTERFACE_URL: "http://localhost:8051"
-    NEXT_PUBLIC_ADAPTER_URL: "http://localhost:8051"
-    ADAPTER_URL: "http://localhost:8051"
-    NEXT_PUBLIC_HANDLER_URL: "http://localhost:8051"
-    HANDLER_URL: "http://localhost:8051"
+    NEXT_PUBLIC_APP_HOST: "localhost"
+    NEXT_PUBLIC_VERCEL_ENV: "production"
+    NEXT_PUBLIC_VERCEL_URL: "http://localhost:8051"
+    # Next.js binding configuration
+    HOST: "0.0.0.0"
+    PORT: "3001"
+    NEXT_PUBLIC_HOST: "0.0.0.0"
+    NEXT_PUBLIC_PORT: "3001"
   resources: {}
 
 proxy:
   enabled: true
   image:
     repository: "nginx"
-    tag: "1.27-alpine"
+    tag: "latest"
     pullPolicy: IfNotPresent
   replicas: 1
   service:
     type: ClusterIP
     port: 80
-    nodePort: null
-  ragServerUrl: "http://rag-server:8081"
-  backendUrl: "http://aiq-backend:8080"
+  env:
+    backendUrl: "http://aiq-backend:8080"
+    ragServerUrl: "http://rag-server:8081"
   resources: {}
-
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  hosts:
-    - host: aiq.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []

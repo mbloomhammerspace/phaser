@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1782252351	auth_token	iojg2ltzMuAZZT2EHnvMWqBEF2VsWcXS

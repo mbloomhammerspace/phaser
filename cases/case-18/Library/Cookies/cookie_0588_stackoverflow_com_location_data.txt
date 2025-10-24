@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1769698622	location_data	pcABVU8bP2ySueGG5wAn0Nr9f0xdlzUh-FiCMc5Al2IpG_Sdkw70-gl3Yq
+# User: AgentWhiskerTwist

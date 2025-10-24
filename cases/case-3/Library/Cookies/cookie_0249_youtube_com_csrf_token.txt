@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1763156295	csrf_token	I1gZHE1Ijrp6BwtvL3M1glrTL4Q8Rr2T

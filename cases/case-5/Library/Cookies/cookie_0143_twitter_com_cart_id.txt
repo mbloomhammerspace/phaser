@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1773840273	cart_id	NzYdCckhLGTCUkrkwkBOEz-x6w1Qpf-iFo

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1791568623	session_id	xlRl9Gab5wbWRn1oZrW2HnU8xj9LRJUi

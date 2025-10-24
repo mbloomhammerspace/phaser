@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1777178723	remember_me	dATYq0S2QTFSpY-KtBS8u3mxyzhmBuZDKT2MdzagYr8

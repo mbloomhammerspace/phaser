@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1769391030	auth_token	16BND7aqtA5IINiTIqUGJxKhCBkuJ1sF
+# User: AgentWhiskerTwist

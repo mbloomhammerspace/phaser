@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+zoom.us	TRUE	/	FALSE	1777093268	ad_id	s43yN1JB5TNUn9s8

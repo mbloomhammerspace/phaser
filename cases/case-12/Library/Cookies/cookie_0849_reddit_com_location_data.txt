@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+reddit.com	TRUE	/	FALSE	1775526130	location_data	mPminaDhWG_T9N8fe5bwikQOyTWSkOekzApGneTDrrFycGbe_bH91tqDI4t

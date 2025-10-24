@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+apple.com	TRUE	/	FALSE	1770939983	timezone	5XMSAdj7YHBN9p7Nlqp1qgK2Rs

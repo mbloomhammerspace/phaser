@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-aiq-aira-backend
+  name: {{ .Release.Name }}-aira-backend
   labels:
     app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
     app.kubernetes.io/component: aira-backend
@@ -54,7 +54,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-aiq-aira-backend
+  name: {{ .Release.Name }}-aira-backend
   labels:
     app.kubernetes.io/name: {{ include "aiq-research-assistant.name" . }}
     app.kubernetes.io/component: aira-backend

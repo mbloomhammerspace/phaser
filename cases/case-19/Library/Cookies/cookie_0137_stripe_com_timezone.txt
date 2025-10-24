@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1790315405	timezone	f_1I_bZ3-RAEoOq3zzTGMVarzyMPnkpIQ4-SHHI

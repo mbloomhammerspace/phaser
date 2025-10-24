@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1781792410	wishlist	i48dV8HJP1-M5IwLD_HbNxjRsOIaiJ

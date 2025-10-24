@@ -111,6 +111,7 @@ An automated, production-ready installer that deploys a complete RAG ecosystem o
 - **Automated Kubernetes Deployment**: Production-ready Kubernetes cluster using Kubespray
 - **GPU Support**: NVIDIA GPU Operator integration for GPU-accelerated workloads
 - **NVIDIA RAG Blueprint**: Complete RAG pipeline with Milvus, NeMo Retriever, and RAG Playground
+- **AI-Q Research Assistant**: Advanced AI research agent with enterprise-grade capabilities
 - **Wizard Interface**: Interactive setup with inventory file support
 - **Comprehensive Logging**: Detailed logging and error tracking
 - **SSH Key Authentication**: Secure remote host access
@@ -143,6 +144,10 @@ An automated, production-ready installer that deploys a complete RAG ecosystem o
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │ │
 │  │  │   Milvus    │  │   NeMo      │  │   RAG       │        │ │
 │  │  │  Vector DB  │  │  Retriever  │  │ Playground  │        │ │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘        │ │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │ │
+│  │  │   AI-Q      │  │   AI-Q      │  │   AI-Q      │        │ │
+│  │  │  Backend    │  │  Frontend   │  │   Nginx     │        │ │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘        │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
@@ -210,11 +215,28 @@ An automated, production-ready installer that deploys a complete RAG ecosystem o
 
 After installation, access your services at:
 
-- **RAG Playground**: http://MASTER_IP:30081
+- **RAG Playground**: http://MASTER_IP:3000 (via port-forward)
+- **AI-Q Research Assistant**: http://MASTER_IP:8051 (via port-forward)
 - **Grafana**: http://MASTER_IP:30671 (admin/admin)
 - **Jaeger**: http://MASTER_IP:30668
 - **Zipkin**: http://MASTER_IP:30669
 - **Attu (Milvus UI)**: http://MASTER_IP:30670
+
+### Port-Forwarding Setup
+
+To access the RAG services from your local machine:
+
+```bash
+# RAG Playground
+kubectl port-forward service/clean-rag-frontend 3000:3000
+
+# AI-Q Research Assistant
+kubectl port-forward service/aiq-aira-nginx 8051:8051
+```
+
+Then access:
+- **RAG Playground**: http://localhost:3000
+- **AI-Q Research Assistant**: http://localhost:8051
 
 ## 🔧 Configuration
 
@@ -260,6 +282,7 @@ The installer automatically discovers and configures storage:
 - **Kubespray**: Production-ready Kubernetes cluster installer
 - **NVIDIA GPU Operator**: GPU driver and device plugin management
 - **NVIDIA RAG Blueprint**: Complete RAG pipeline implementation
+- **AI-Q Research Assistant**: Enterprise-grade AI research agent
 - **Milvus**: Vector database with GPU acceleration
 - **NeMo Retriever**: Document processing and embedding services
 
@@ -342,6 +365,8 @@ kubectl get pods -n rag-system
 - [🚀 Quick Start Guide](docs/QUICK_START.md) - Get up and running quickly
 
 ### Feature Documentation
+- [🤖 AI-Q Research Assistant](docs/AI_Q_RESEARCH_ASSISTANT.md) - Enterprise AI research agent setup
+- [📊 Deployment Status](docs/DEPLOYMENT_STATUS.md) - Current system status and health checks
 - [💾 Storage Configuration](docs/STORAGE.md) - CSI storage and NFS setup
 - [📊 Observability Guide](docs/OBSERVABILITY.md) - Monitoring and tracing setup
 - [🔍 Preflight Discovery](docs/PREFLIGHT_DISCOVERY.md) - Hardware discovery and planning

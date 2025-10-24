@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1784629579	wishlist	9wV91CPJiHnzjPCCtMbTIQJ_r8FaG347CDuAfsKJ2qDOKztWBkWRxYz8Vg4H

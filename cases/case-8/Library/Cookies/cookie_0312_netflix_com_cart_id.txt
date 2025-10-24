@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1784538447	cart_id	AvtXoht1dAAI7LJe-kk1F1XSVfcUe

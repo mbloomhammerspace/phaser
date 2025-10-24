@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1781738544	wishlist	mblfKdlL2YSjKoSqmFojBePf0FtvLwQGV1fe83kEg-AOZWTlZNcA9W1c

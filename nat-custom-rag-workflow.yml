@@ -1,0 +1,19 @@
+# NAT Workflow using custom RAG tool
+# This uses our custom RAG tool that follows the NAT v1.2.1 pattern
+
+functions:
+  custom_rag_search:
+    _type: custom_rag
+    base_url: http://10.0.0.25:30081
+    collection_name: case_1000230
+    max_tokens: 2000
+    temperature: 0.1
+
+workflow:
+  _type: chat_completion
+  llm_name: nim_llm
+  verbose: true
+
+
+
+

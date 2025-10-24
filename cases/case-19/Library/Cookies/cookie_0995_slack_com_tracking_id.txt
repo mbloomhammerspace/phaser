@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1767865676	tracking_id	ILUYfc6czcbG3drKU6tje9ynmy_b2i_Yah7_f1rpYEybJuo1KPlE7zDy7m

@@ -1,0 +1,23 @@
+# NAT Workflow using OpenAI-compatible LLM with RAG integration
+# This attempts to use OpenAI LLM provider with our RAG server
+
+llms:
+  rag_llm:
+    _type: openai
+    model_name: llama-3.3-70b-instruct
+    api_base: http://10.0.0.25:30081/v1
+    api_key: "sk-dummy"
+    temperature: 0.1
+    max_tokens: 2000
+
+functions:
+  nvidia_rag_search:
+    _type: nvidia_rag
+    base_url: http://10.0.0.25:30081
+    collection_name: case_1000230
+    top_k: 5
+
+workflow:
+  _type: chat_completion
+  llm_name: rag_llm
+  verbose: true

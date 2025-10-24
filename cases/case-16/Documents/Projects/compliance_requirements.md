@@ -1,0 +1,7 @@
+# Compliance Requirements.Md
+
+Theme: telecom
+Project Type: compliance
+Created: 2024-12-15
+
+This document contains project-specific information.

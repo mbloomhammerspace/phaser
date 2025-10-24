@@ -77,11 +77,15 @@ MASTER_IP=$(grep -A1 "kube_control_plane:" discovery/inventory.yml | grep "ansib
 
 echo "🎉 Your RAG system is ready!"
 echo ""
-echo "📋 Access URLs:"
-echo "• RAG Playground: http://$MASTER_IP:30081"
-echo "• RAG API: http://$MASTER_IP:30080"
+echo "📋 Access URLs (via port-forward):"
+echo "• RAG Playground: http://localhost:3000"
+echo "• AI-Q Research Assistant: http://localhost:8051"
 echo "• Grafana (Monitoring): http://$MASTER_IP:30671 (admin/admin)"
 echo "• Jaeger (Tracing): http://$MASTER_IP:30668"
 echo "• Zipkin (Tracing): http://$MASTER_IP:30669"
 echo "• Attu (Milvus UI): http://$MASTER_IP:30670"
+echo ""
+echo "🔧 Port-forwarding setup:"
+echo "kubectl port-forward service/clean-rag-frontend 3000:3000"
+echo "kubectl port-forward service/aiq-aira-nginx 8051:8051"
 ```

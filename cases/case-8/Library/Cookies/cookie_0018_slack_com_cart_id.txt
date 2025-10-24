@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1783339101	cart_id	uIxCLnkY0qlLFt722KSsyTJVVs

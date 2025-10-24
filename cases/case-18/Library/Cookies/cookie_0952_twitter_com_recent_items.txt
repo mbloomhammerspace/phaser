@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1767287019	recent_items	MrsyiyJBF71no4B2_NJ9E

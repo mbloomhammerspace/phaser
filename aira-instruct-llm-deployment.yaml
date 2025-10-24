@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aira-instruct-llm
+  labels:
+    app: aira-instruct-llm
+spec:
+  serviceName: aira-instruct-llm
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aira-instruct-llm
+  template:
+    metadata:
+      labels:
+        app: aira-instruct-llm
+    spec:
+      containers:
+      - name: aira-instruct-llm
+        image: nvcr.io/nim/nvidia/llama-3.3-nemotron-super-49b-v1:1.8.5
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ngc-api
+              key: NGC_API_KEY
+        resources:
+          limits:
+            nvidia.com/gpu: 2
+          requests:
+            nvidia.com/gpu: 2
+        volumeMounts:
+        - name: modelstore
+          mountPath: /opt/nim/.cache
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: modelstore
+        persistentVolumeClaim:
+          claimName: hammerspace-modelstore-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aira-instruct-llm
+  labels:
+    app: aira-instruct-llm
+spec:
+  selector:
+    app: aira-instruct-llm
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP

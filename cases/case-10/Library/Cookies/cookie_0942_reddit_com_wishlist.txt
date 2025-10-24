@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+reddit.com	TRUE	/	FALSE	1770917156	wishlist	VIlHXa6Szg7YCHa9RyaUHxwUV2XZwpDBbs1gB6Mr-BZ2pY5o

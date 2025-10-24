@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+adobe.com	TRUE	/	FALSE	1777529725	tracking_id	DOZ1oe6OLu-CrWpgGCb4b2TxkdE75GVGr0skw2Jd9Snop9e3mNuwNA

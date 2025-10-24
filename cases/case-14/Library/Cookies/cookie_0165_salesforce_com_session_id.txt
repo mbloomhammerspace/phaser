@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1775365370	session_id	1VTMe4f4NfYHsmAwiNojL8VIKbOAjCdZ

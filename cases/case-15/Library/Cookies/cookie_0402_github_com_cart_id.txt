@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1762583015	cart_id	1ZI3HdGvvLTJqWuv-b7J-E5Xdl7Bew9bzJGAYSesO0MZspf

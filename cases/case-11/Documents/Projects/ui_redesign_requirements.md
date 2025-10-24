@@ -1,0 +1,7 @@
+# Ui Redesign Requirements.Md
+
+Theme: government
+Project Type: ui_redesign
+Created: 2024-12-15
+
+This document contains project-specific information.

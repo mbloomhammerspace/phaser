@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1777619518	timezone	rTxzvG0_1H5GuFU_5vKGYpE2UYrHLCc-veD5XyMh181d1SM62qQni9CEX-Uce2eK

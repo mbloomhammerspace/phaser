@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1790835595	ad_id	_UofCVv-mTecccAUdUCPoMoU-v_C9VX6

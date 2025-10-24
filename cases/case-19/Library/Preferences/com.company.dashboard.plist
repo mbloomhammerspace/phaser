@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.company.dashboard</string>
+    <key>CFBundleName</key>
+    <string>Enterprise Dashboard</string>
+    <key>CFBundleVersion</key>
+    <string>2.1.4</string>
+    <key>LastLoginDate</key>
+    <date>2024-12-15T10:30:00Z</date>
+    <key>UserPreferences</key>
+    <dict>
+        <key>Theme</key>
+        <string>dark</string>
+        <key>Language</key>
+        <string>en-US</string>
+        <key>Notifications</key>
+        <true/>
+        <key>AutoRefresh</key>
+        <true/>
+        <key>RefreshInterval</key>
+        <integer>30</integer>
+    </dict>
+    <key>SecuritySettings</key>
+    <dict>
+        <key>EncryptionEnabled</key>
+        <true/>
+        <key>SessionTimeout</key>
+        <integer>3600</integer>
+        <key>TwoFactorAuth</key>
+        <true/>
+    </dict>
+    <key>DeveloperInfo</key>
+    <dict>
+        <key>LeadDeveloper</key>
+        <string>SpookyShadowSpinner</string>
+        <key>SecurityLead</key>
+        <string>CipherSlyFox</string>
+        <key>DevOpsLead</key>
+        <string>StealthyStarWarden</string>
+    </dict>
+</dict>
+</plist>

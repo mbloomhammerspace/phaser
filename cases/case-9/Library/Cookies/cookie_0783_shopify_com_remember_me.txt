@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1771345345	remember_me	SOCqwPEU_O9hpOOII3Ag7BzD3dhNJhmgMuJlvVp4fEzPHaRu7YA3d

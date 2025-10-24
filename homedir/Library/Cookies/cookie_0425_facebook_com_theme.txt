@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+facebook.com	TRUE	/	FALSE	1782524975	theme	iCAwSkmaMcQpa2LH0ipVxYH8k_0jI8UK3JZ

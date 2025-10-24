@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stackoverflow.com	TRUE	/	FALSE	1792389697	timezone	PX6KRcpNB_hYG_NRVnaqrW1KwM4

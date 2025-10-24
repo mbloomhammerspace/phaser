@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1789678736	language	voq-5IH2Ts4LqyChBTJ5z-Gmv6oWvyD0m

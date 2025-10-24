@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1790125970	auth_token	o86DrueG4Rv2Q9x7o761yXRpyiip0Kv8

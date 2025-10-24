@@ -16,6 +16,7 @@ Welcome to the comprehensive documentation for the Kubernetes RAG Installer. Thi
 
 | Document | Description | Time to Read |
 |----------|-------------|--------------|
+| **[AI-Q Research Assistant](AI_Q_RESEARCH_ASSISTANT.md)** | Enterprise AI research agent setup | 15 min |
 | **[Observability Guide](OBSERVABILITY.md)** | Monitoring and tracing setup | 10 min |
 | **[AI Error Handling](AI_ERROR_HANDLING.md)** | AI-powered troubleshooting | 8 min |
 
@@ -85,8 +86,9 @@ pip3 install -r requirements.txt
 # Get master node IP
 MASTER_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
-# Access URLs
-echo "RAG Playground: http://$MASTER_IP:30081"
+# Access URLs (via port-forward)
+echo "RAG Playground: http://localhost:3000"
+echo "AI-Q Research Assistant: http://localhost:8051"
 echo "Grafana: http://$MASTER_IP:30671 (admin/admin)"
 echo "Jaeger: http://$MASTER_IP:30668"
 ```
@@ -97,6 +99,7 @@ echo "Jaeger: http://$MASTER_IP:30668"
 - **Kubernetes Cluster**: Kubespray-based deployment
 - **NVIDIA GPU Operator**: GPU management and monitoring
 - **NVIDIA RAG Blueprint**: Complete RAG pipeline
+- **AI-Q Research Assistant**: Enterprise-grade AI research agent
 - **Milvus**: Vector database with GPU acceleration
 
 ### **Observability Stack**

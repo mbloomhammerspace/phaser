@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+microsoft.com	TRUE	/	FALSE	1768861324	auth_token	afw5WBqmVMIK4dYXOLs7CuB0s8V27blo

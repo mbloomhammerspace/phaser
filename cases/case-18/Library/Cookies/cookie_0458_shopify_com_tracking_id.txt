@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1764165169	tracking_id	upT8vv6SA98lJGzIx4C0zxW5BAiHrMKIRjrx1psz3mrLFAwToxRvEHfxwZVu_

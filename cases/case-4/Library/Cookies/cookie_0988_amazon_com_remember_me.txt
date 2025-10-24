@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+amazon.com	TRUE	/	FALSE	1763835842	remember_me	wp-y6M3QBGa5xLvah5_rlp

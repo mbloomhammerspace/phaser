@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+spotify.com	TRUE	/	FALSE	1780111257	ad_id	lfp28dRSW1tSd7TiuyUuP31WU7Nf09ikuH20qCX

@@ -1,0 +1,16 @@
+llms:
+  nim_llm:
+    _type: nim
+    model_name: meta/llama-3.1-70b-instruct
+    base_url: ${NIM_BASE_URL:-"http://nim-llm:8000"}
+    api_key: ${NIM_API_KEY:-"nvidia"}
+
+functions:
+  current_time:
+    _type: current_datetime
+
+workflow:
+  _type: react_agent
+  llm_name: nim_llm
+  tool_names: [current_time]
+  verbose: true

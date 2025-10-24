@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1774634279	session_id	uBYju3T9IBxbjxnfMzFo4jpWtkxjAeXr

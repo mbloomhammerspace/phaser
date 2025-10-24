@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+dropbox.com	TRUE	/	FALSE	1792293021	csrf_token	EbJm7ahV35WaWqkiw74fp1ndAsee2Nt3

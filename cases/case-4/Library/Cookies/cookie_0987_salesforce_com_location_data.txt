@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1789145299	location_data	uD_vOH793cEAE6BhDDzDKs0gXsa99m-Mm

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+slack.com	TRUE	/	FALSE	1780205409	theme	lAfTUWhbLVPLQI-bvXHV8VJ6_3IzqKp

@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1780729300	auth_token	2xh2QDqVCMzrfyoT9JakCTvg3UambRm6

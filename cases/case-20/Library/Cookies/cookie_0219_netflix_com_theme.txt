@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+netflix.com	TRUE	/	FALSE	1773586754	theme	EkEF7h-JPwp6OULEtJ7eVIeNZqxhsx16IiBqV

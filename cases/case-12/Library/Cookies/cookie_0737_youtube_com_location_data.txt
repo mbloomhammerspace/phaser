@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+youtube.com	TRUE	/	FALSE	1771579261	location_data	qYAeuXE34akxauhhzLrTK9YU-UTnft5Y1OEEu9VRughYEscP6NB

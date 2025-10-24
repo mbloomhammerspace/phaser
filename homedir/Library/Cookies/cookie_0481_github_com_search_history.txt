@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1781467453	search_history	Bux8h0liuvvuEXF3GMbu6kt4FaSkxChXpr5eLBh-hUjb5SZRAx9QXgzhC16tn4l

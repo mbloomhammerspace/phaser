@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-milvus-connection
+spec:
+  containers:
+  - name: test-milvus
+    image: python:3.12-slim
+    command: ["/bin/bash"]
+    args: ["-c", "pip install pymilvus && python -c \"
+from pymilvus import connections, utility
+try:
+    connections.connect('default', host='10.233.53.224', port=19530)
+    print('✅ Milvus connection successful!')
+    collections = utility.list_collections()
+    print(f'Found {len(collections)} collections:')
+    for i, name in enumerate(collections, 1):
+        print(f'  {i}. {name}')
+except Exception as e:
+    print(f'❌ Connection failed: {e}')
+sleep 30
+\""]
+  restartPolicy: Never

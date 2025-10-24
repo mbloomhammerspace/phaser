@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1777287726	remember_me	4jRCxoKclmWmivy5uXO-t-5ALd-5oE0pD_c4yMg

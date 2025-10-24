@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+github.com	TRUE	/	FALSE	1789064544	csrf_token	EUQireqkasmtfP0qjZd8f3rl8pWxvkAg

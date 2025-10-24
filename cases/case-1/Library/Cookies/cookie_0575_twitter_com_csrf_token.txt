@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1774596452	csrf_token	3d3aHvxEJAerqNyKdls0rNgQSZZT4kj9

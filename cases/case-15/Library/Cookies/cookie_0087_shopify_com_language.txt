@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+shopify.com	TRUE	/	FALSE	1776834851	language	fMTYv5KD0Nny9jNSUqiXOHsyAaAJnUh9UE3FH3UTVhcmb5ShkXMGn0

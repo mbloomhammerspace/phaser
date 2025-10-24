@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+salesforce.com	TRUE	/	FALSE	1770946331	recent_items	BoByCgfaBXgoNhtFu0ouOKvXp9lhhL7KxMkB52rdPCrCobXNR

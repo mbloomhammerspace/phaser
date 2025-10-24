@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+twitter.com	TRUE	/	FALSE	1788326784	auth_token	6StSUGkN8RJuhn1ICab1oaZH2urvOTm5

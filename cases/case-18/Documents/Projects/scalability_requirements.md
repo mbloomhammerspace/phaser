@@ -1,0 +1,7 @@
+# Scalability Requirements.Md
+
+Theme: energy
+Project Type: scalability
+Created: 2024-12-15
+
+This document contains project-specific information.

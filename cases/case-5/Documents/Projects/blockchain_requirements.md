@@ -1,0 +1,7 @@
+# Blockchain Requirements.Md
+
+Theme: manufacturing
+Project Type: blockchain
+Created: 2024-12-15
+
+This document contains project-specific information.

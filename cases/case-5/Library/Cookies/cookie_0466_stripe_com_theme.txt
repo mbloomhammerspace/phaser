@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+stripe.com	TRUE	/	FALSE	1766940337	theme	6f4-wMvm6lC8kMrdQXQ0_gMVK8OsizHWvMWJ-itj_Hjd4hDiXvhxH4reNk_yCli
+# User: SpookyShadowSpinner

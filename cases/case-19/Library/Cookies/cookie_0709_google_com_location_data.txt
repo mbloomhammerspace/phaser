@@ -1,0 +1,4 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+google.com	TRUE	/	FALSE	1770759447	location_data	qj3nVWSp9ie12fheCHHh3nzAGWn2yDUlg2WMjOmZK
