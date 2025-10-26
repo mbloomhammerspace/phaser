@@ -6,6 +6,39 @@ This document provides a comprehensive timeline of all changes, deployments, fix
 
 ---
 
+## October 26, 2025 - Critical Discovery: Missing Hammerspace Tier 0 Installation
+
+### ⚠️ **Critical Finding: Playbooks Incomplete**
+- **Issue**: Hammerspace Tier 0 storage class (`hammerspace-tier0`) **NOT included in playbooks**
+- **Impact**: Automated installation will fail without this critical storage class
+- **Discovery**: Storage class was created manually during OCI deployment
+
+### Documentation Updates
+- **Created**: `playbooks/06-hammerspace-tier0.yml` - Missing storage class installation
+- **Updated**: `blueprint-configuration.md` - Added critical finding about missing installation
+- **Updated**: `replication-instructions.md` - Added Step 6 for Hammerspace Tier 0 installation
+- **Result**: Complete installation process now documented
+
+### Storage Class Configuration
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hammerspace-tier0
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+```
+
+### Impact Assessment
+- **Playbooks Gap**: Missing critical storage class installation
+- **Manual Intervention**: Required for complete deployment
+- **Replication Risk**: New deployments would fail without this step
+- **Resolution**: Added to playbook sequence and documentation
+
+---
+
 ## October 2024
 
 ### October 3rd, 2024 - Initial Cluster Deployment

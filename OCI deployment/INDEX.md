@@ -83,7 +83,14 @@ This documentation package provides comprehensive information for recreating and
 - Key performance indicators
 - Recommendations for future monitoring
 
-### 9. [replication-instructions.md](./replication-instructions.md)
+### 9. [hammerspace-tier0-critical-finding.md](./hammerspace-tier0-critical-finding.md)
+**Critical Discovery: Missing Hammerspace Tier 0 Installation**
+- Playbook gap analysis
+- Missing storage class installation
+- Resolution and prevention measures
+- Verification steps and lessons learned
+
+### 10. [replication-instructions.md](./replication-instructions.md)
 **Step-by-Step Replication Guide**
 - Prerequisites and requirements
 - Infrastructure setup

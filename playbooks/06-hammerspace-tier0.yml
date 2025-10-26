@@ -1,0 +1,41 @@
+---
+- name: Install Hammerspace Tier 0 Storage Class
+  hosts: kube_control_plane
+  become: false
+  gather_facts: false
+  
+  vars:
+    hammerspace_tier0_storage_class:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: hammerspace-tier0
+      provisioner: kubernetes.io/no-provisioner
+      reclaimPolicy: Delete
+      volumeBindingMode: WaitForFirstConsumer
+      allowVolumeExpansion: true
+      
+  tasks:
+    - name: Create Hammerspace Tier 0 Storage Class
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ hammerspace_tier0_storage_class }}"
+        
+    - name: Verify Hammerspace Tier 0 Storage Class
+      kubernetes.core.k8s_info:
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+        name: hammerspace-tier0
+      register: hammerspace_sc_status
+      
+    - name: Display Storage Class Status
+      debug:
+        msg: "Hammerspace Tier 0 Storage Class: {{ hammerspace_sc_status.resources[0].metadata.name }} - {{ hammerspace_sc_status.resources[0].status.phase | default('Created') }}"
+        
+    - name: List All Storage Classes
+      shell: kubectl get storageclass
+      register: storage_classes
+      
+    - name: Display All Storage Classes
+      debug:
+        msg: "{{ storage_classes.stdout_lines }}"

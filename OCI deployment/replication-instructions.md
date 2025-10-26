@@ -314,6 +314,29 @@ spec:
 
 ---
 
+## Step 6: Install Hammerspace Tier 0 Storage Class
+
+### 6.1 Critical Missing Component
+**Important**: The Hammerspace Tier 0 storage class (`hammerspace-tier0`) was **NOT included in the original playbooks**. This storage class must be installed manually.
+
+### 6.2 Install Hammerspace Tier 0
+```bash
+# Install Hammerspace Tier 0 Storage Class (CRITICAL - Missing from original playbooks)
+ansible-playbook -i inventory.yml playbooks/06-hammerspace-tier0.yml
+```
+
+### 6.3 Verify Storage Class Installation
+```bash
+# Verify storage class was created
+kubectl get storageclass hammerspace-tier0
+
+# Expected output:
+# NAME                PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+# hammerspace-tier0   kubernetes.io/no-provisioner   Delete          WaitForFirstConsumer   true                   1m
+```
+
+---
+
 ## Step 7: NVIDIA RAG Blueprint Deployment
 
 ### 7.1 Deploy RAG Server

@@ -295,6 +295,41 @@ spec:
 
 ### Storage Configuration
 
+#### ⚠️ **Critical Finding: Missing Hammerspace Tier 0 Installation**
+
+**Important Discovery**: The Hammerspace Tier 0 storage class (`hammerspace-tier0`) is **NOT included in the playbooks**. This storage class was created manually during the OCI deployment and is not part of the automated installation process.
+
+##### Manual Hammerspace Tier 0 Configuration Required
+
+The `hammerspace-tier0` storage class was created manually with the following configuration:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hammerspace-tier0
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+```
+
+**This means**:
+1. **Playbooks are incomplete** - They don't include Hammerspace Tier 0 setup
+2. **Manual intervention required** - Storage class must be created manually
+3. **Deployment gap** - Automated installation won't include this critical storage class
+
+##### Storage Classes Available
+- **local-path**: Default storage class for local storage (installed by Kubespray)
+- **nfs-csi**: NFS CSI driver for shared storage (installed by Kubespray)
+- **hammerspace-tier0**: Hammerspace Tier 0 storage class (**MANUALLY CREATED**)
+
+##### Key Persistent Volumes
+- **hammerspace-hub-pv**: 200Gi NFS volume for data ingestion
+- **hammerspace-milvus-pv**: 100Gi NFS volume for Milvus data
+- **hammerspace-modelstore-pv**: 500Gi NFS volume for model storage
+- **hammerspace-root-pv**: 100Ti NFS volume for root storage
+
 #### MinIO Object Storage
 ```yaml
 # minio deployment
