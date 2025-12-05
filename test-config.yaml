@@ -1,0 +1,22 @@
+blueprint_version: v2.2.1
+nodes:
+- hostname: master1
+  ip: 192.168.1.10
+  username: ubuntu
+  is_master: true
+  has_gpu: false
+- hostname: worker1
+  ip: 192.168.1.11
+  username: ubuntu
+  is_master: false
+  has_gpu: true
+gpu_count: 1
+memory_limit: 16Gi
+storage:
+  enabled: true
+  type: nfs
+observability:
+  enabled: true
+  prometheus: true
+  grafana: true
+  jaeger: true
